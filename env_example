@@ -1,0 +1,22 @@
+INFILE=formas_241106.txt
+LOGFILE=log_formas_241106.txt
+PACKAGE_ID=chalmers:root:2.0.12
+TEMPLATE_ID=chalmers:vr-eng:0.5.1
+SWECRIS_URL=https://swecris-api.vr.se/v1/projects/
+SWECRIS_API_KEY=xxxxxxxxxxxxx
+# Funder settings
+FUNDER_NAME=Formas
+FUNDER_ID=https://ror.org/03pjs1y45
+FUNDER_SUFFIX=Formas
+CRIS_FUNDERID=xxxxxxxxxxxxxxxxx
+CREATE_CRIS_PROJECTS=true
+CRIS_YEAR=2024
+DSW_URL=https://dsw.chalmers.se/wizard-api
+DSW_UI_URL=https://dsw.chalmers.se/wizard
+DSW_USER=test@chalmers.se
+DSW_PW=xxxxxxxxxxxxxxxxxxxxxx
+CRIS_URL=https://research.chalmers.se
+CRIS_API_URL=https://xxxxxxx:xxxxxxx@chalmers-research-api-prod.azurewebsites.net/api
+CRIS_PERSON_URL=https://xxxxxxx:xxxxxxx@chalmers-research-persons-prod.azurewebsites.net/api
+CRIS_UID=xxxxxxxxxxx
+CRIS_PW=xxxxxxxxxxx
