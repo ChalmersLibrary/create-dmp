@@ -14,16 +14,6 @@ import uuid
 import configparser
 import logging
 
-# Script for creating new DMP:s (projects) in DS Wizard from a tab separated file with metadata
-# and new Project records in Chalmers CRIS,
-# possibly enriched with data from a secondary source, such as SweCRIS or GDP.
-#
-# Assumes a (minimum) input file in the following format (esp. note name orientation and e-mail address used
-# (should correspond with the e-mail returned by the Idp)!):
-# 2021-05377	Olsson Louise   louise.olsson@chalmers.se	0000-0002-8308-0784
-#
-# / urban.andersson@chalmers.se
-
 # Settings
 load_dotenv()
 dswurl = os.getenv("DSW_URL")
@@ -83,7 +73,7 @@ with open(infile) as infile_txt:
         # Initialize other parameters with test data
         project_title = 'Default test project'
         project_title_swe = ''
-        project_desc = 'This is the description. More to follow... ÅÄÖåäö'
+        project_desc = 'This is the description. More to follow...'
         project_desc_swe = ''
         project_start = '2022-01-01'
         project_end = '2025-12-31'
@@ -266,14 +256,10 @@ with open(infile) as infile_txt:
         dmp_data = dict(events=[start_path, name_dict, email_dict, orcid_dict, aff_dict, role_dict, project_dict,
                                 project_name_dict, project_desc_dict, project_start_dict, project_end_dict,
                                 funding_dict, funder_dict, project_status_dict, grantid_dict, phase_dict])
-        # print(dmp_data)
-
         try:
             newdmp_url = dswurl + '/questionnaires/' + dmpuuid + '/content'
             print(dmp_data)
             data_newdmp = requests.put(url=newdmp_url, json=dmp_data, headers=headers).text
-            # data_newdmp = json.loads(data_newdmp)
-            # print('status: ' + str(data_newdmp.status_code))
             print('DMP ' + dmpuuid + ' updated with content.')
         except requests.exceptions.HTTPError as e:
             print('Could not update DMP with id: ' + dmpuuid + '.')
@@ -285,7 +271,7 @@ with open(infile) as infile_txt:
             permissions=[dict(memberType='UserQuestionnairePermType',
                 memberUuid=useruuid, perms=['VIEW', 'COMMENT', 'EDIT', 'ADMIN'])]
         )
-
+        
         try:
             dmpowner_url = dswurl + '/questionnaires/' + dmpuuid + '/share'
             data_dmpowner = requests.put(url=dmpowner_url, json=dmp_owner_data, headers=headers).text
@@ -320,41 +306,7 @@ with open(infile) as infile_txt:
                 person_cris_id = cth_personid
                 persons = []
                 person = dict()
-                # try:
-                #     person_get_url = os.getenv(
-                #         "CRIS_PERSON_URL") + '/Persons?idValue=' + email + '&idTypeValue=EMAIL&maxCount=1&selectedFields=Id'
-                #     person_crisdata = requests.get(url=person_get_url, headers={'Accept': 'application/json'}).text
-                #     person_crisdata = json.loads(person_crisdata)
-                #     if person_crisdata['TotalCount'] == 0:
-                #         print(
-                #             "Person with e-mail " + email + " not found in CRIS. Skip and add project " + projectid + " manually!")
-                #         print('\n')
-                #         project_cris_id = 0
-                #         # Print output to logfile and continue with next
-                #         current_date = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")
-                #         with open(os.getenv("LOGFILE"), 'a') as lf:
-                #             lf.write(
-                #                 current_date + '\t' + projectid + '\t' + project_title + '\t' + fname + ' ' + lname + '\t' + email + '\t' + os.getenv(
-                #                     "DSW_UI_URL") + '/projects/' + dmpuuid + '\t' + str(
-                #                     project_cris_id) + '\t' + cris_project_url + '\n')
-                #         print('\n')
-                #         continue
-                #     else:
-                #         person_cris_id = person_crisdata['Persons'][0]['Id']
-                # except requests.exceptions.HTTPError as e:
-                #     print('Person lookup failed. Skip and add project ' + projectid + ' manually!')
-                #     print('\n')
-                #     project_cris_id = 0
-                #     # Print output to logfile and continue with next
-                #     current_date = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")
-                #     with open(os.getenv("LOGFILE"), 'a') as lf:
-                #         lf.write(
-                #             current_date + '\t' + projectid + '\t' + project_title + '\t' + fname + ' ' + lname + '\t' + email + '\t' + os.getenv(
-                #                 "DSW_UI_URL") + '/projects/' + dmpuuid + '\t' + str(
-                #                 project_cris_id) + '\t' + cris_project_url + '\n')
-                #     print('\n')
-                #     continue
-
+                
                 # Get Person OrgHome from CRIS
                 person_org_cris_id = ''
                 # person_orghome_name = ''
