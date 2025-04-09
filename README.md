@@ -6,6 +6,6 @@ The script will try and create the user if not already found in DSW.
 
 Copy env_example to .env and add current values to get started. Settings (paths) in create-new-dmp.conf need to be adjusted to the selected DSW KM.
 
-Can be used in conjunction with our other DS Wizrd services, such as:   
+Can be used in conjunction with our other DS Wizard services, such as:   
 https://github.com/ChalmersLibrary/dsw2es   
 https://github.com/ChalmersLibrary/cth-dmps-api   
