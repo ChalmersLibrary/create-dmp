@@ -13,6 +13,12 @@ import string
 import uuid
 import configparser
 import logging
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+import smtplib
+
+## Script for creating new DMPs in Chalmers DSW from a tab-delimited input file
+## See README.md for details
 
 # Settings
 load_dotenv()
@@ -24,11 +30,86 @@ logfile = os.getenv("LOGFILE")
 packageid = os.getenv("PACKAGE_ID")
 templateid = os.getenv("TEMPLATE_ID")
 create_cris_projects = os.getenv("CREATE_CRIS_PROJECTS")
+smtp_server = os.getenv("SMTP_SERVER")
+smtp_port = os.getenv("SMTP_PORT")
+smtp_user = os.getenv("SMTP_USER")
+smtp_password = os.getenv("SMPT_PASSWORD")
+email_sender = os.getenv("EMAIL_SENDER")
+send_emails = os.getenv("SEND_EMAILS")
 
 # Read config
 config = configparser.ConfigParser()
 config.read_file(open(r'create-new-dmp.conf'))
 
+def load_template(mail_template_path):
+    with open(mail_template_path, 'r', encoding='utf-8') as f:
+        return f.read()
+
+def send_html_email(recipient, recipent_name, subject, template_path, projectid, dmptitle, dmpurl, crisurl):
+    html_template = load_template(template_path)
+    html_content = html_template.format(recipent_name=recipent_name, projectid=projectid, dmptitle=dmptitle, dmpurl=dmpurl, crisurl=crisurl)
+
+    msg = MIMEMultipart('alternative')
+    msg['From'] = email_sender
+    msg['To'] = recipient
+    msg['Subject'] = subject
+    msg.attach(MIMEText(html_content, 'html'))
+
+    try:
+        with smtplib.SMTP(smtp_server, smtp_port) as server:
+            server.starttls()
+            server.login(smtp_user, smtp_password)
+            server.sendmail(email_sender, recipient, msg.as_string())
+            print("Email sent successfully.")
+    except Exception as e:
+        print(f"Failed to send email: {e}")
+
+# Start a PDB session and login for use later
+pdb_url = os.getenv("PDB_URL")
+pdb_user = os.getenv("PDB_USER")
+pdb_pw = os.getenv("PDB_PW")
+
+pdb_headers = {
+    "Content-Type": "application/json"
+}
+
+pdbstart_payload = {
+    "function": "session_start",
+    "params": []
+}
+
+pdbstart_response = requests.post(pdb_url, headers=pdb_headers, data=json.dumps(pdbstart_payload))
+if pdbstart_response.status_code == 200:
+    try:
+        pdbstart_result = pdbstart_response.json()
+        session_token = pdbstart_result['session']
+        print("PDB session started successfully with session token: " + session_token)
+    except ValueError:
+        print(pdbstart_response.text)
+        exit()
+else:
+    print(f"PDB session start request failed with status code {pdbstart_response.status_code}")
+    exit()
+
+pdblogin_payload = {
+    "function": "session_auth_login",
+    "params": [pdb_user,pdb_pw],
+    "session": session_token
+}
+
+pdblogin_response = requests.post(pdb_url, headers=pdb_headers, data=json.dumps(pdblogin_payload))
+if pdblogin_response.status_code == 200:
+    try:
+        pdlogin_result = pdblogin_response.json()
+        print("PDB login succeeded")
+    except ValueError:
+        print(pdblogin_response.text)
+        exit()
+else:
+    print(f"PDB login failed with status code {pdblogin_response.status_code}")
+    exit()
+
+# DSW authentication
 dsw_token = ''
 try:
     dsw_authurl = dswurl + '/tokens'
@@ -55,11 +136,12 @@ with open(infile) as infile_txt:
 
         # Initial variables, change according to input file
         # Assumes inverted names, change below otherwise
-        projectid = row[1]
-        name = row[2]
-        email = row[3]
-        orcid = row[5]
-        cth_personid = row[4]
+        projectid = row[0]
+        name = row[1]
+        email = row[2]
+        orcid = row[3]
+        funder_name = row[4]
+        #cth_personid = row[3]
         lname = name.split()[0].strip()
         fname = name.split()[1].strip()
         dname = fname + ' ' + lname
@@ -80,6 +162,25 @@ with open(infile) as infile_txt:
         funder_name = os.getenv("FUNDER_NAME")
         funderid = os.getenv("FUNDER_ID")
         funder_suffix = os.getenv("FUNDER_SUFFIX")
+
+        # Choose e-mail template based on funder
+        if funder_name.lower() == 'formas':
+            mail_template = 'mail_template_formas.html'
+        elif funder_name.lower() == 'vr':
+            mail_template = 'mail_template_vr.html'
+        else:
+            mail_template = 'mail_template_generic.html'
+
+        # ROR ID for funder
+        if funder_name.lower() == 'formas':
+            funderid = 'https://ror.org/03pjs1y45'
+            funder_suffix = 'Formas'
+        elif funder_name.lower() == 'vr':
+            funderid = 'https://ror.org/03yrm4c26'
+            funder_suffix = 'VR'
+        else:
+            funderid = os.getenv("FUNDER_ID")
+            funder_suffix = os.getenv("FUNDER_SUFFIX")      
 
         # Fetch data from SweCRIS, if not available in the Prisma spreadsheet
         swecris_url = os.getenv("SWECRIS_URL") + projectid + '_' + funder_suffix
@@ -109,6 +210,38 @@ with open(infile) as infile_txt:
                 lf.write('No data for id: ' + projectid + ' was found in SweCRIS! Skipping to next.')
             continue
 
+        # Get primary email and ORCID from PDB
+        pdbperson_payload = {
+                "function": "person_dig",
+                "params": [
+                    {"official_emails": email},
+                    {
+                        "orcid": True,
+                        "name": True,
+					    "cid": { "name": True },
+                        "primary_email": True
+                    }
+                ],
+                "session": session_token
+        }
+
+        pdbperson_response = requests.post(pdb_url, headers=pdb_headers, data=json.dumps(pdbperson_payload))
+        if pdbperson_response.status_code == 200:
+            try:
+                pdbperson_result = pdbperson_response.json()
+                pdbperson = pdbperson_result['result'][0]
+                primary_email = pdbperson['primary_email']
+                if 'orcid' in pdbperson:
+                    orcid = pdbperson['orcid']
+                    print('Found ORCID in PDB: ' + orcid)
+            except ValueError:
+                print(pdbperson_response.text)
+                primary_email = email
+                exit()
+        else:
+            print(f"PDB person lookup failed failed with status code {pdbstart_response.status_code}")
+            primary_email = email
+   
         # Lookup user in DSW and get Uuid, or create new if user don't exist
         dsw_getuser = dswurl + '/users?q=' + str(email)
         userdata = requests.get(url=dsw_getuser, headers=headers).text
@@ -239,7 +372,8 @@ with open(infile) as infile_txt:
         project_status_dict = dict(
             path=config.get('Paths', 'status.path'),
             phasesAnsweredIndication=phases_answered_dict,
-            value=dict(value=config.get('Paths', 'status.choice.granted'), type='AnswerReply'), type='SetReplyEvent',
+            value=dict(value=config.get('Paths', 'status.choice.granted'), type='AnswerReply'), 
+            type='SetReplyEvent',
             uuid=str(uuid.uuid4()))
         grantid_dict = dict(
             path=config.get('Paths', 'grant.id.path'),
@@ -301,20 +435,23 @@ with open(infile) as infile_txt:
                                 ContractEndDate=project_end[0:10] + 'T00:00:00', DmpValue=dmp_url, DmpVersion=1,
                                 ContractOrganization=contract_org, OrganizationID=os.getenv("CRIS_FUNDERID"),
                                 ContractIdentifiers=[contract_id], CreatedDate=current_date, CreatedBy='dsw')
-                # Get Person from CRIS
+                
+                # Get Person from CRIS using e-mail address
                 # If we already have Research Person IDs, the first step could be skipped
-                person_cris_id = cth_personid
+                person_get_url = os.getenv("CRIS_PERSON_URL") + '/Persons?idValue=' + primary_email + '&idTypeValue=EMAIL'
+                person_crisdata = requests.get(url=person_get_url, headers={'Accept': 'application/json'}).text
+                person_crisdata = json.loads(person_crisdata)
+                person_cris_id = person_crisdata['Id']
+
                 persons = []
                 person = dict()
                 
-                # Get Person OrgHome from CRIS
+                # Get Person current Org home from CRIS
                 person_org_cris_id = ''
                 # person_orghome_name = ''
                 person_org = dict()
                 try:
-                    person_org_get_url = os.getenv(
-                        "CRIS_PERSON_URL") + '/Persons/' + person_cris_id + '/OrganizationHomes?year=' + os.getenv(
-                        "CRIS_YEAR") + '&currentOnly=true&maxLevelDepartment=true'
+                    person_org_get_url = os.getenv("CRIS_PERSON_URL") + '/Persons/' + person_cris_id + '/OrganizationHomes?year=' + os.getenv("CRIS_YEAR") + '&currentOnly=true&maxLevelDepartment=true'
                     person_org_crisdata = requests.get(url=person_org_get_url,
                                                        headers={'Accept': 'application/json'}).text
                     person_org_crisdata = json.loads(person_org_crisdata)
@@ -376,6 +513,10 @@ with open(infile) as infile_txt:
                     print('\n')
                     continue
 
+        # Create and send email if all is fine (and we have selected to do do)
+        if send_emails == "true":
+            send_html_email(email, dname, 'Gratulerar till beviljat forskningsbidrag! / Congratulations on your grant approval!s', 'mail_template_formas.html', projectid, project_title, dmp_url, cris_project_url)
+
         # Ready
         # Print output to logfile and continue with next
         current_date = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")
@@ -385,3 +526,23 @@ with open(infile) as infile_txt:
                     "DSW_UI_URL") + '/projects/' + dmpuuid + '\t' + str(
                     project_cris_id) + '\t' + cris_project_url + '\n')
         print('\n')
+
+# Close PDB session
+pdbstop_payload = {
+    "function": "session_stop",
+    "session": session_token
+}
+
+pdbstop_response = requests.post(pdb_url, headers=pdb_headers, data=json.dumps(pdbstop_payload))
+if pdbstop_response.status_code == 200:
+    try:
+        pdbstop_result = pdbstop_response.json()
+        print("PDB session stopped successfully")
+    except ValueError:
+        print(pdbstop_response.text)
+        exit()
+else:
+    print(f"PDB session {session_token} failed to stop: {pdbstop_response.status_code}")
+    exit()
+
+exit()
