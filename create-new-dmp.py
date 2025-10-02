@@ -65,7 +65,7 @@ def send_html_email(recipient, recipent_name, subject, template_path, projectid,
         print(f"Failed to send email: {e}")
 
 # Start a PDB session and login for use later
-pdb_url = os.getenv("PDB_URL")
+pdb_url = os.getenv("PDB_API_URL")
 pdb_user = os.getenv("PDB_USER")
 pdb_pw = os.getenv("PDB_PW")
 
