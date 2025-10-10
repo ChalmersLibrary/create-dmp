@@ -36,6 +36,7 @@ smtp_user = os.getenv("SMTP_USER")
 smtp_password = os.getenv("SMPT_PASSWORD")
 email_sender = os.getenv("EMAIL_SENDER")
 send_emails = os.getenv("SEND_EMAILS")
+source = os.getenv("SOURCE") # e.g. gdp or swecris
 
 # Read config
 config = configparser.ConfigParser()
@@ -139,8 +140,9 @@ with open(infile) as infile_txt:
         projectid = row[0]
         name = row[1]
         email = row[2]
-        orcid = row[3]
-        funder_name = row[4]
+        #orcid = row[3]
+        orcid = ''
+        funder_name = row[3]
         #cth_personid = row[3]
         lname = name.split()[0].strip()
         fname = name.split()[1].strip()
@@ -182,33 +184,58 @@ with open(infile) as infile_txt:
             funderid = os.getenv("FUNDER_ID")
             funder_suffix = os.getenv("FUNDER_SUFFIX")      
 
-        # Fetch data from SweCRIS, if not available in the Prisma spreadsheet
-        swecris_url = os.getenv("SWECRIS_URL") + projectid + '_' + funder_suffix
-        swecris_headers = {'Accept': 'application/json',
-                           'Authorization': 'Bearer ' + os.getenv("SWECRIS_API_KEY")}
-        try:
-            swecrisdata = requests.get(url=swecris_url, headers=swecris_headers).text
-            if 'Internal server error' in swecrisdata:
+        if source.lower() == 'swecris' or source == '':
+            # Fetch data from SweCRIS, if not available in the Prisma spreadsheet
+            swecris_url = os.getenv("SWECRIS_URL") + projectid + '_' + funder_suffix
+            swecris_headers = {'Accept': 'application/json',
+                            'Authorization': 'Bearer ' + os.getenv("SWECRIS_API_KEY")}
+            try:
+                swecrisdata = requests.get(url=swecris_url, headers=swecris_headers).text
+                if 'Internal server error' in swecrisdata:
+                    print('No data for id: ' + projectid + ' was found in SweCRIS! Skipping to next.')
+                    continue
+                swecrisdata = json.loads(swecrisdata)
+                print('Got data from SweCRIS!')
+                project_title = swecrisdata['projectTitleEn']
+                project_title_swe = swecrisdata['projectTitleSv']
+                project_desc = swecrisdata['projectAbstractEn']
+                project_desc_swe = swecrisdata['projectAbstractSv']
+                project_start = swecrisdata['projectStartDate']
+                project_end = swecrisdata['projectEndDate']
+                # Note: Project start/end date needs to be 'yyyy-mm-dd' in DSW, comes as 'yyyy-mm-dd hh:ss:sss' from Swecris
+            except requests.exceptions.HTTPError as e:
                 print('No data for id: ' + projectid + ' was found in SweCRIS! Skipping to next.')
+                print('\n')
+                with open(os.getenv("LOGFILE"), 'a') as lf:
+                    lf.write('No data for id: ' + projectid + ' was found in SweCRIS! Skipping to next.')
                 continue
-            swecrisdata = json.loads(swecrisdata)
-            print('Got data from SweCRIS!')
-            project_title = swecrisdata['projectTitleEn']
-            project_title_swe = swecrisdata['projectTitleSv']
-            project_desc = swecrisdata['projectAbstractEn']
-            project_desc_swe = swecrisdata['projectAbstractSv']
-            # Check what field to use for each funder!
-            #project_start = swecrisdata['fundingStartDate']
-            #project_end = swecrisdata['fundingEndDate']
-            project_start = swecrisdata['projectStartDate']
-            project_end = swecrisdata['projectEndDate']
-            # Note: Project start/end date needs to be 'yyyy-mm-dd' in DSW, comes as 'yyyy-mm-dd hh:ss:sss' from Swecris
-        except requests.exceptions.HTTPError as e:
-            print('No data for id: ' + projectid + ' was found in SweCRIS! Skipping to next.')
-            print('\n')
-            with open(os.getenv("LOGFILE"), 'a') as lf:
-                lf.write('No data for id: ' + projectid + ' was found in SweCRIS! Skipping to next.')
-            continue
+        elif source.lower() == 'gdp':
+            # Fetch data from GDP (Formas), if not available in the Prisma spreadsheet
+            gdp_url = os.getenv("GDP_BASE_URL") + '?diarienummer=' + projectid
+            gdp_headers = {'Accept': 'application/json',
+                            'Authorization': os.getenv("GDP_API_KEY")}
+            try:
+                gdpdata = requests.get(url=gdp_url, headers=gdp_headers).text
+                if 'Internal server error' in gdpdata:
+                    print('No data for id: ' + projectid + ' was found in GDP! Skipping to next.')
+                    continue
+                gdpdata = json.loads(gdpdata)
+                print('Got data from GDP!')
+                project_title = gdpdata[0]['titelEng']
+                project_title_swe = gdpdata[0]['titel']
+                project_desc = gdpdata[0]['beskrivningEng']
+                project_desc_swe = gdpdata[0]['beskrivning']
+                project_start = gdpdata[0]['startdatum']
+                project_end = gdpdata[0]['slutdatum']
+            except requests.exceptions.HTTPError as e:
+                print('No data for id: ' + projectid + ' was found in GDP! Skipping to next.')
+                print('\n')
+                with open(os.getenv("LOGFILE"), 'a') as lf:
+                    lf.write('No data for id: ' + projectid + ' was found in GDP! Skipping to next.')
+                continue
+        else:
+            print('No or wrong Source selected (should be swecris or gdp), exiting!')
+            sys.exit(1)
 
         # Get primary email and ORCID from PDB
         pdbperson_payload = {
@@ -231,6 +258,7 @@ with open(infile) as infile_txt:
                 pdbperson_result = pdbperson_response.json()
                 pdbperson = pdbperson_result['result'][0]
                 primary_email = pdbperson['primary_email']
+                print('Primary email in PDB: ' + primary_email)
                 if 'orcid' in pdbperson:
                     orcid = pdbperson['orcid']
                     print('Found ORCID in PDB: ' + orcid)
@@ -438,10 +466,14 @@ with open(infile) as infile_txt:
                 
                 # Get Person from CRIS using e-mail address
                 # If we already have Research Person IDs, the first step could be skipped
+
+                # debug (we need to fix this)
+                primary_email = 'aurban@chalmers.se'
+
                 person_get_url = os.getenv("CRIS_PERSON_URL") + '/Persons?idValue=' + primary_email + '&idTypeValue=EMAIL'
                 person_crisdata = requests.get(url=person_get_url, headers={'Accept': 'application/json'}).text
                 person_crisdata = json.loads(person_crisdata)
-                person_cris_id = person_crisdata['Id']
+                person_cris_id = str(person_crisdata['Persons'][0]['Id'])
 
                 persons = []
                 person = dict()
@@ -515,7 +547,12 @@ with open(infile) as infile_txt:
 
         # Create and send email if all is fine (and we have selected to do do)
         if send_emails == "true":
-            send_html_email(email, dname, 'Gratulerar till beviljat forskningsbidrag! / Congratulations on your grant approval!s', 'mail_template_formas.html', projectid, project_title, dmp_url, cris_project_url)
+            try:
+                send_html_email(email, dname, 'Gratulerar till beviljat forskningsbidrag! / Congratulations on your grant approval!s', 'mail_template_formas.html', projectid, project_title, dmp_url, cris_project_url)
+            except Exception as e:
+                print(f"Failed to send email to {email}: {e}")
+                with open(os.getenv("LOGFILE"), 'a') as lf:
+                    lf.write(f"Failed to send email to {email}: {e}\n")
 
         # Ready
         # Print output to logfile and continue with next
