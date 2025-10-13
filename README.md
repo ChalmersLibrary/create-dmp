@@ -15,7 +15,8 @@ Please use the staging environment (dsw-staging.xxx) and (at least initially) se
 * Mail server for outgoing mail (SMTP)   
 * Access to SweCRIS and/or GDP API:s    
 
+Execute directly from command line, i.e. **python3 create-new-dmp.py**   
+
 Can be used in conjunction with our other DS Wizard services, such as:   
 https://github.com/ChalmersLibrary/dsw2es        
 https://github.com/ChalmersLibrary/cth-dmps-api   
-

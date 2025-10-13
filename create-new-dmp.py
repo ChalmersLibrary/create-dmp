@@ -19,7 +19,7 @@ import smtplib
 
 ## Script for creating new DMPs in Chalmers DSW from a tab-delimited input file
 ## See README.md for details
-## Require DSW >=4.22.0 and PDB access
+## Require DSW >=4.22.0 and PDB access. Change IntegrationLegacyType to IntegrationType if DSW version is < 4.22.0.
 
 # Settings
 load_dotenv()
@@ -51,9 +51,14 @@ def send_html_email(recipient, recipent_name, subject, template_path, projectid,
     html_template = load_template(template_path)
     html_content = html_template.format(recipent_name=recipent_name, projectid=projectid, dmptitle=dmptitle, dmpurl=dmpurl, crisurl=crisurl)
 
+    # debug
+    cc = 'jeremy.azzopardi@chalmers.se'
+
     msg = MIMEMultipart('alternative')
     msg['From'] = email_sender
     msg['To'] = recipient
+    if cc:
+        msg['Cc'] = cc
     msg['Subject'] = subject
     msg.attach(MIMEText(html_content, 'html'))
 
