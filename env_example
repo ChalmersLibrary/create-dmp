@@ -23,7 +23,6 @@ SMTP_SERVER=smtp.xxxx.se
 SMTP_PORT=xxxx
 SMTP_USER=xxxxxx
 SMPT_PASSWORD=xxxxxxxxxxxx
-SEND_EMAILS=false
 EMAIL_SENDER=dataoffice@chalmers.se
 PDB_API_URL=https://pdb-api-url.chalmers.se
 PDB_USER=xxxxxx

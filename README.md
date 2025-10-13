@@ -15,7 +15,14 @@ Please use the staging environment (dsw-staging.xxx) and (at least initially) se
 * Mail server for outgoing mail (SMTP)   
 * Access to SweCRIS and/or GDP API:s    
 
-Execute directly from command line, i.e. **python3 create-new-dmp.py**   
+Execute directly from command line, i.e. **python3 create-new-dmp.py -i formas_251010.txt -f formas**   
+
+*Options*    
+* -i, --infile - Input file, tab-delimited, with columns: ProjectID, Name (inverted), Email, FunderName. default=infile (param)    
+* -f, --funder - Funder name, e.g. formas or vr, (required)    
+* -u, --updateCRIS - Create CRIS project record (y/n), default=y
+* -e, --sendEmails - Send e-mail user automatically (y/n) default=n
+* -v, --verbose - Verbose output (y/n), default=n     
 
 Can be used in conjunction with our other DS Wizard services, such as:   
 https://github.com/ChalmersLibrary/dsw2es        
