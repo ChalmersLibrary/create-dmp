@@ -52,7 +52,8 @@ def send_html_email(recipient, recipent_name, subject, template_path, projectid,
     html_content = html_template.format(recipent_name=recipent_name, projectid=projectid, dmptitle=dmptitle, dmpurl=dmpurl, crisurl=crisurl)
 
     # debug
-    cc = 'jeremy.azzopardi@chalmers.se'
+    cc = ''
+    #cc = 'jeremy.azzopardi@chalmers.se'
 
     msg = MIMEMultipart('alternative')
     msg['From'] = email_sender
