@@ -19,6 +19,7 @@ import smtplib
 
 ## Script for creating new DMPs in Chalmers DSW from a tab-delimited input file
 ## See README.md for details
+## Require DSW >=4.22.0 and PDB access
 
 # Settings
 load_dotenv()
@@ -394,7 +395,7 @@ with open(infile) as infile_txt:
         funder_dict = dict(
             path=config.get('Paths', 'funder.path'),
             phasesAnsweredIndication=phases_answered_dict,
-            value=dict(value=dict(value=funder_name, id=funderid, type='IntegrationType'), type='IntegrationReply'),
+            value=dict(value=dict(value=funder_name, id=funderid, type='IntegrationLegacyType'), type='IntegrationReply'),
             type='SetReplyEvent',
             uuid=str(uuid.uuid4()))
         project_status_dict = dict(
