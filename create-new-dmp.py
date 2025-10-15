@@ -27,8 +27,6 @@ load_dotenv()
 dswurl = os.getenv("DSW_URL")
 dswuser = os.getenv("DSW_USER")
 dswpw = os.getenv("DSW_PW")
-infile = os.getenv("INFILE")
-logfile = os.getenv("LOGFILE")
 packageid = os.getenv("PACKAGE_ID")
 templateid = os.getenv("TEMPLATE_ID")
 create_cris_projects = os.getenv("CREATE_CRIS_PROJECTS")
@@ -38,7 +36,6 @@ smtp_user = os.getenv("SMTP_USER")
 smtp_password = os.getenv("SMPT_PASSWORD")
 email_sender = os.getenv("EMAIL_SENDER")
 send_emails = ''
-source = os.getenv("SOURCE") # e.g. gdp or swecris
 email_template = ''
 
 # Read config
@@ -48,20 +45,38 @@ config.read_file(open(r'create-new-dmp.conf'))
 # Command line params
 parser = ArgumentParser(description='Script for creating new DMP(s) and Chalmers CRIS project records from funder grant data. \nUse as (example): python3 create-new-dmp.py -i "formas_251001.txt" -f "formas" -u y -e y -v',
                         formatter_class=ArgumentDefaultsHelpFormatter)
-parser.add_argument('-i', '--infile', help='Input file, tab-delimited, with columns: ProjectID, Name (inverted), Email, FunderName', default=infile)
+parser.add_argument('-i', '--infile', help='Input file, tab-delimited, with columns: ProjectID, Name (inverted), Email', required=True)
 parser.add_argument('-f', '--funder', help='Funder name, e.g. formas or vr', required=True)
 parser.add_argument('-u', '--updateCRIS', help='Create CRIS project record, y/n', choices=['y', 'n'], default='y')
 parser.add_argument('-e', '--sendEmails', help='Send e-mail to new user, y/n', choices=['y', 'n'], default='n')
 parser.add_argument('-v', '--verbose', help='Verbose output, y/n', choices=['y', 'n'], default='n')
 args = parser.parse_args()
 
-# Define email template, depending on funder
-if args.funder.lower().strip() == 'formas':
+infile = args.infile.strip()
+funder_name = args.funder.lower().strip()
+
+# Create logfile, example: formas_20231001_121212.log
+logfile = funder_name + '_' + datetime.now().strftime("%Y%m%d_%H%M%S") + '.log'
+
+# Define funder specific params
+if funder_name == 'formas':
+    source = 'gdp'
     email_template = 'templates/mail_template_formas.html'
-elif args.funder.lower().strip() == 'vr':
+    funderid = 'https://ror.org/03pjs1y45'
+    funder_suffix = 'Formas'
+    funder_display_name = 'Formas'
+elif funder_name == 'vr':
+    source = 'swecris'
     email_template = 'templates/mail_template_vr.html'
+    funderid = 'https://ror.org/03yrm4c26'
+    funder_suffix = 'VR'
+    funder_display_name = 'Vetenskapsrådet / Swedish Research Council (VR)'
 else:
+    source = 'swecris'
     email_template = 'templates/mail_template_generic.html'
+    funderid = os.getenv("FUNDER_ID")
+    funder_suffix = os.getenv("FUNDER_SUFFIX")
+    funder_display_name = os.getenv("FUNDER_NAME")
 
 def load_template(mail_template_path):
     with open(mail_template_path, 'r', encoding='utf-8') as f:
@@ -111,7 +126,7 @@ def pdb_stop_session(session_token):
         exit()
 
 # Validate input
-if args.funder.lower().strip() not in ['formas', 'vr']:
+if funder_name not in ['formas', 'vr']:
     print('ERROR: Funder has to be one of "formas", "vr"')
     exit()
 
@@ -134,7 +149,7 @@ if pdbstart_response.status_code == 200:
     try:
         pdbstart_result = pdbstart_response.json()
         session_token = pdbstart_result['session']
-        print("PDB session started successfully with session token: " + session_token)
+        print("PDB session started successfully")
     except ValueError:
         print(pdbstart_response.text)
         exit()
@@ -191,14 +206,15 @@ with open(infile) as infile_txt:
     print('\n******************************\n')
     print("We are about to process " + str(line_count) + " projects, using the following settings:\n")
     print("Input file: " + infile)
-    print("Funder: " + args.funder.lower().strip())
+    print("Funder: " + funder_name)
+    print("Source for project data: " + source)
     print("Create CRIS project records: " + args.updateCRIS.lower().strip())
     print("Send e-mail to users automatically: " + args.sendEmails.lower().strip())
     print("E-mail template: " + email_template)
     print("DSW URL: " + dswurl)
-    print("Package ID: " + packageid)
+    print("KM Package ID: " + packageid)
     print("Template ID: " + templateid)
-    print("Log file: " + logfile)
+    print("Logfile: " + logfile)
     print("Verbose output: " + args.verbose.lower().strip())
     print("\n")
     print("Is this correct, shall we continue? (y/n)")
@@ -230,7 +246,6 @@ with open(infile) as infile_txt:
         email = row[2]
         #orcid = row[3]
         orcid = ''
-        funder_name = row[3]
         #cth_personid = row[3]
         lname = name.split()[0].strip()
         fname = name.split()[1].strip()
@@ -249,29 +264,7 @@ with open(infile) as infile_txt:
         project_desc_swe = ''
         project_start = '2022-01-01'
         project_end = '2025-12-31'
-        funder_name = os.getenv("FUNDER_NAME")
-        funderid = os.getenv("FUNDER_ID")
-        funder_suffix = os.getenv("FUNDER_SUFFIX")
-
-        # Choose e-mail template based on funder
-        if funder_name.lower() == 'formas':
-            mail_template = 'mail_template_formas.html'
-        elif funder_name.lower() == 'vr':
-            mail_template = 'mail_template_vr.html'
-        else:
-            mail_template = 'mail_template_generic.html'
-
-        # ROR ID for funder
-        if funder_name.lower() == 'formas':
-            funderid = 'https://ror.org/03pjs1y45'
-            funder_suffix = 'Formas'
-        elif funder_name.lower() == 'vr':
-            funderid = 'https://ror.org/03yrm4c26'
-            funder_suffix = 'VR'
-        else:
-            funderid = os.getenv("FUNDER_ID")
-            funder_suffix = os.getenv("FUNDER_SUFFIX")      
-
+        
         if source.lower() == 'swecris' or source == '':
             # Fetch data from SweCRIS, if not available in the Prisma spreadsheet
             swecris_url = os.getenv("SWECRIS_URL") + projectid + '_' + funder_suffix
@@ -280,7 +273,7 @@ with open(infile) as infile_txt:
             try:
                 swecrisdata = requests.get(url=swecris_url, headers=swecris_headers).text
                 if 'Internal server error' in swecrisdata:
-                    print('No data for id: ' + projectid + ' was found in SweCRIS! Skipping to next.')
+                    print('No data for id: ' + projectid + '_' + funder_suffix + ' was found in SweCRIS! Skipping to next.')
                     continue
                 swecrisdata = json.loads(swecrisdata)
                 print('Got data from SweCRIS!')
@@ -292,10 +285,10 @@ with open(infile) as infile_txt:
                 project_end = swecrisdata['projectEndDate']
                 # Note: Project start/end date needs to be 'yyyy-mm-dd' in DSW, comes as 'yyyy-mm-dd hh:ss:sss' from Swecris
             except requests.exceptions.HTTPError as e:
-                print('No data for id: ' + projectid + ' was found in SweCRIS! Skipping to next.')
+                print('No data for id: ' + projectid + '_' + funder_suffix + ' was found in SweCRIS! Skipping to next.')
                 print('\n')
                 with open(os.getenv("LOGFILE"), 'a') as lf:
-                    lf.write('No data for id: ' + projectid + ' was found in SweCRIS! Skipping to next.')
+                    lf.write('No data for id: ' + projectid + '_' + funder_suffix + ' was found in SweCRIS! Skipping to next.')
                 continue
         elif source.lower() == 'gdp':
             # Fetch data from GDP (Formas), if not available in the Prisma spreadsheet
@@ -485,7 +478,7 @@ with open(infile) as infile_txt:
         funder_dict = dict(
             path=config.get('Paths', 'funder.path'),
             phasesAnsweredIndication=phases_answered_dict,
-            value=dict(value=dict(value=funder_name, id=funderid, type='IntegrationLegacyType'), type='IntegrationReply'),
+            value=dict(value=dict(value=funder_display_name, id=funderid, type='IntegrationLegacyType'), type='IntegrationReply'),
             type='SetReplyEvent',
             uuid=str(uuid.uuid4()))
         project_status_dict = dict(
@@ -561,7 +554,7 @@ with open(infile) as infile_txt:
                 # If we already have Research Person IDs, the first step could be skipped
 
                 # debug (we need to fix this)
-                primary_email = 'aurban@chalmers.se'
+                #primary_email = 'aurban@chalmers.se'
 
                 person_get_url = os.getenv("CRIS_PERSON_URL") + '/Persons?idValue=' + primary_email + '&idTypeValue=EMAIL'
                 person_crisdata = requests.get(url=person_get_url, headers={'Accept': 'application/json'}).text
@@ -619,7 +612,7 @@ with open(infile) as infile_txt:
                 try:
                     project_create = requests.post(url=create_project_url, json=cris_project, headers=headers).text
                     project_create = json.loads(project_create)
-                    print(project_create)
+                    #print(project_create)
                     project_cris_id = project_create['ID']
                     print('Project ' + projectid + ' created with id: ' + str(project_cris_id))
                     cris_project_url = os.getenv("CRIS_URL") + '/en/project/' + str(project_cris_id)
@@ -638,7 +631,7 @@ with open(infile) as infile_txt:
         # Create and send email if all is fine (and we have selected to do do)
         if args.sendEmails.lower().strip() == "y":
             try:
-                send_html_email(email, dname, 'Gratulerar till beviljat forskningsbidrag! / Congratulations on your grant approval!s', email_template, projectid, project_title, dmp_url, cris_project_url)
+                send_html_email(email, dname, 'Gratulerar till beviljat forskningsbidrag! / Congratulations on your grant approval!', email_template, projectid, project_title, dmp_url, cris_project_url)
             except Exception as e:
                 print(f"Failed to send email to {email}: {e}")
                 with open(os.getenv("LOGFILE"), 'a') as lf:
@@ -647,7 +640,7 @@ with open(infile) as infile_txt:
         # Ready
         # Print output to logfile and continue with next
         current_date = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")
-        with open(os.getenv("LOGFILE"), 'a') as lf:
+        with open(logfile, 'a') as lf:
             lf.write(
                 current_date + '\t' + projectid + '\t' + project_title + '\t' + fname + ' ' + lname + '\t' + email + '\t' + os.getenv(
                     "DSW_UI_URL") + '/projects/' + dmpuuid + '\t' + str(
