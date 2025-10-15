@@ -1,6 +1,6 @@
 Script for creating new DMP:s (projects) in DS Wizard from a tab separated file with metadata and new Project records in Chalmers CRIS (research.chalmers.se), possibly enriched with data from a secondary source, such as SweCRIS or GDP.
 
-Assumes an input file in the following format (tab separated, esp. note name orientation and e-mail address used (should ideally correspond with the e-mail returned by the Idp, but the script will try and look this up from Chalmers PDB):        
+Assumes an input file in the following format (tab separated), esp. note name orientation and e-mail address used (should ideally correspond with the e-mail returned by the Idp, but the script will try and look this up from Chalmers PDB):        
 2021-12345\tEinstein Albert\teinstein@chalmers.se\n        
 
 The script will try and create the user (and set permissions) if not already found in DSW. It will also (if selected) send e-mails to the researchers after DMP and CRIS project have been created, using a set of pre-defined, funder specific templates.    
