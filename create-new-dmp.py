@@ -57,11 +57,11 @@ args = parser.parse_args()
 
 # Define email template, depending on funder
 if args.funder.lower().strip() == 'formas':
-    email_template = 'mail_template_formas.html'
+    email_template = 'templates/mail_template_formas.html'
 elif args.funder.lower().strip() == 'vr':
-    email_template = 'mail_template_vr.html'
+    email_template = 'templates/mail_template_vr.html'
 else:
-    email_template = 'mail_template_generic.html'
+    email_template = 'templates/mail_template_generic.html'
 
 def load_template(mail_template_path):
     with open(mail_template_path, 'r', encoding='utf-8') as f:
