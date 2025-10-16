@@ -20,9 +20,10 @@ Execute directly from command line, i.e. **python3 create-new-dmp.py -i formas_2
 *Options*    
 * -i, --infile - Input file, tab-delimited, with columns: ProjectID, Name (inverted), Email. default=infile (param)    
 * -f, --funder - Funder name, e.g. formas or vr, (required)    
-* -u, --updateCRIS - Create CRIS project record (y/n), default=y
-* -e, --sendEmails - Send e-mail user automatically (y/n) default=n
-* -v, --verbose - Verbose output (y/n), default=n   
+* -u, --updateCRIS - Create CRIS project records (y/n), default=y
+* -e, --sendEmails - Send e-mails to users automatically (y/n) default=n
+* -v, --verbose - Enable verbose output (y/n), default=n  
+* -h, --help    
 
 Can be used in conjunction with our other DS Wizard services, such as:   
 https://github.com/ChalmersLibrary/dsw2es        

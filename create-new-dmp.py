@@ -12,11 +12,10 @@ import random
 import string
 import uuid
 import configparser
-import logging
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-import smtplib
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+import utils
 
 ## Script for creating new DMPs in Chalmers DSW from a tab-delimited input file
 ## See README.md for details
@@ -43,13 +42,13 @@ config = configparser.ConfigParser()
 config.read_file(open(r'create-new-dmp.conf'))
 
 # Command line params
-parser = ArgumentParser(description='Script for creating new DMP(s) and Chalmers CRIS project records from funder grant data. \nUse as (example): python3 create-new-dmp.py -i "formas_251001.txt" -f "formas" -u y -e y -v',
+parser = ArgumentParser(description='Script for creating new DMP(s) and Chalmers CRIS project records from funder grant data. \nUse as (example): python3 create-new-dmp.py -i formas_251001.txt -f formas -u y -e y',
                         formatter_class=ArgumentDefaultsHelpFormatter)
 parser.add_argument('-i', '--infile', help='Input file, tab-delimited, with columns: ProjectID, Name (inverted), Email', required=True)
 parser.add_argument('-f', '--funder', help='Funder name, e.g. formas or vr', required=True)
-parser.add_argument('-u', '--updateCRIS', help='Create CRIS project record, y/n', choices=['y', 'n'], default='y')
-parser.add_argument('-e', '--sendEmails', help='Send e-mail to new user, y/n', choices=['y', 'n'], default='n')
-parser.add_argument('-v', '--verbose', help='Verbose output, y/n', choices=['y', 'n'], default='n')
+parser.add_argument('-u', '--updateCRIS', help='Create CRIS project record', choices=['y', 'n'], default='y')
+parser.add_argument('-e', '--sendEmails', help='Send e-mail to new user', choices=['y', 'n'], default='n')
+parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output')
 args = parser.parse_args()
 
 infile = args.infile.strip()
@@ -57,6 +56,24 @@ funder_name = args.funder.lower().strip()
 
 # Create logfile, example: formas_20231001_121212.log
 logfile = funder_name + '_' + datetime.now().strftime("%Y%m%d_%H%M%S") + '.log'
+
+print('\n')
+
+# Validate input etc.
+if funder_name not in ['formas', 'vr']:
+    print('ERROR: Funder has to be one of "formas", "vr". Please correct this and try again!')
+    exit()
+if args.sendEmails.lower().strip() == 'y' and (not smtp_server or not smtp_port or not smtp_user or not smtp_password or not email_sender):
+    print('ERROR: You have selected to send e-mails, but SMTP settings are not complete in .env file. Please correct this and try again!')
+    exit()
+if os.path.exists(infile) is False and os.path.isfile(infile) is False and os.access(infile, os.R_OK) is False:
+    print("ERROR: Input file " + infile + " does not exist, is not readable or it is not a proper file, exiting!")
+    exit()
+else:
+    print("Input file " + infile + " exists and is readable.")
+if args.sendEmails.lower().strip() == 'y' and utils.test_smtp_connection() is False:
+    print("ERROR: Could not connect to SMTP server using existing settings in .env, exiting!")
+    exit()
 
 # Define funder specific params
 if funder_name == 'formas':
@@ -78,57 +95,9 @@ else:
     funder_suffix = os.getenv("FUNDER_SUFFIX")
     funder_display_name = os.getenv("FUNDER_NAME")
 
-def load_template(mail_template_path):
-    with open(mail_template_path, 'r', encoding='utf-8') as f:
-        return f.read()
-
-def send_html_email(recipient, recipent_name, subject, template_path, projectid, dmptitle, dmpurl, crisurl):
-    html_template = load_template(template_path)
-    html_content = html_template.format(recipent_name=recipent_name, projectid=projectid, dmptitle=dmptitle, dmpurl=dmpurl, crisurl=crisurl)
-
     # debug
     cc = ''
     #cc = 'jeremy.azzopardi@chalmers.se'
-
-    msg = MIMEMultipart('alternative')
-    msg['From'] = email_sender
-    msg['To'] = recipient
-    if cc:
-        msg['Cc'] = cc
-    msg['Subject'] = subject
-    msg.attach(MIMEText(html_content, 'html'))
-
-    try:
-        with smtplib.SMTP(smtp_server, smtp_port) as server:
-            server.starttls()
-            server.login(smtp_user, smtp_password)
-            server.sendmail(email_sender, recipient, msg.as_string())
-            print("Email sent successfully.")
-    except Exception as e:
-        print(f"Failed to send email: {e}")
-
-def pdb_stop_session(session_token):
-    pdbstop_payload = {
-        "function": "session_stop",
-        "params": [],
-        "session": session_token
-    }
-    pdbstop_response = requests.post(pdb_url, headers=pdb_headers, data=json.dumps(pdbstop_payload))
-    if pdbstop_response.status_code == 200:
-        try:
-            pdbstop_result = pdbstop_response.json()
-            print("PDB session stopped successfully")
-        except ValueError:
-            print(pdbstop_response.text)
-            exit()
-    else:
-        print(f"PDB session stop request failed with status code {pdbstop_response.status_code}")
-        exit()
-
-# Validate input
-if funder_name not in ['formas', 'vr']:
-    print('ERROR: Funder has to be one of "formas", "vr"')
-    exit()
 
 # Start a PDB session and login for use later
 pdb_url = os.getenv("PDB_API_URL")
@@ -154,7 +123,7 @@ if pdbstart_response.status_code == 200:
         print(pdbstart_response.text)
         exit()
 else:
-    print(f"PDB session start request failed with status code {pdbstart_response.status_code}")
+    print(f"ERROR: PDB session start request failed with status code {pdbstart_response.status_code}")
     exit()
 
 pdblogin_payload = {
@@ -172,8 +141,8 @@ if pdblogin_response.status_code == 200:
         print(pdblogin_response.text)
         exit()
 else:
-    print(f"PDB login failed with status code {pdblogin_response.status_code}")
-    pdb_stop_session(session_token)
+    print(f"ERROR: PDB login failed with status code {pdblogin_response.status_code}")
+    utils.pdb_stop_session(session_token)
     exit()
 
 # DSW authentication
@@ -185,10 +154,10 @@ try:
     data_auth = json.loads(data_auth)
     dsw_token = data_auth['token']
 except requests.exceptions.HTTPError as e:
-    print('Could not authenticate with DSW, user: ' + dswuser + ' , existing.')
+    print('ERROR: Could not authenticate with DSW, user: ' + dswuser + ' , existing.')
     with open(os.getenv("LOGFILE"), 'a') as lf:
-        lf.write('Could not authenticate with DSW, user: ' + dswuser + ' , exiting: ' + e.response.text)
-    pdb_stop_session(session_token)
+        lf.write('ERROR: Could not authenticate with DSW, user: ' + dswuser + ' , exiting: ' + e.response.text)
+    utils.pdb_stop_session(session_token)
     sys.exit(1)
 
 headers = {'Accept': 'application/json',
@@ -202,6 +171,7 @@ with open(infile) as infile_txt:
     # Count number of lines in input file
     rows = list(csv.reader(infile_txt, delimiter='\t'))
     line_count = len(rows)
+    errcount = 0
 
     print('\n******************************\n')
     print("We are about to process " + str(line_count) + " projects, using the following settings:\n")
@@ -214,8 +184,8 @@ with open(infile) as infile_txt:
     print("DSW URL: " + dswurl)
     print("KM Package ID: " + packageid)
     print("Template ID: " + templateid)
+    print("CRIS URL: " + os.getenv("CRIS_URL"))
     print("Logfile: " + logfile)
-    print("Verbose output: " + args.verbose.lower().strip())
     print("\n")
     print("Is this correct, shall we continue? (y/n)")
     
@@ -227,21 +197,21 @@ with open(infile) as infile_txt:
         print('Ok, continuing...\n')
     elif choice in no:
         print('Ok, exiting...')
-        pdb_stop_session(session_token)
+        utils.pdb_stop_session(session_token)
         exit()
     else:
         print('Invalid input, exiting...')
-        pdb_stop_session(session_token)
+        utils.pdb_stop_session(session_token)
         exit()
 
     for row in rows:
-        print(f'{row[1]}')
         useruuid = ''
         pw = ''
 
         # Initial variables, change according to input file
         # Assumes inverted names, change below otherwise
-        projectid = row[0]
+        projectid = row[0].strip()
+        print('Processing project ' + projectid)
         name = row[1]
         email = row[2]
         #orcid = row[3]
@@ -250,6 +220,7 @@ with open(infile) as infile_txt:
         lname = name.split()[0].strip()
         fname = name.split()[1].strip()
         dname = fname + ' ' + lname
+        print(dname)
         auth_data = []
         newuser_data = []
         dmp_data = []
@@ -273,7 +244,8 @@ with open(infile) as infile_txt:
             try:
                 swecrisdata = requests.get(url=swecris_url, headers=swecris_headers).text
                 if 'Internal server error' in swecrisdata:
-                    print('No data for id: ' + projectid + '_' + funder_suffix + ' was found in SweCRIS! Skipping to next.')
+                    print('ERROR: No data for id: ' + projectid + '_' + funder_suffix + ' was found in SweCRIS! Skipping to next.')
+                    errcount += 1
                     continue
                 swecrisdata = json.loads(swecrisdata)
                 print('Got data from SweCRIS!')
@@ -285,10 +257,11 @@ with open(infile) as infile_txt:
                 project_end = swecrisdata['projectEndDate']
                 # Note: Project start/end date needs to be 'yyyy-mm-dd' in DSW, comes as 'yyyy-mm-dd hh:ss:sss' from Swecris
             except requests.exceptions.HTTPError as e:
-                print('No data for id: ' + projectid + '_' + funder_suffix + ' was found in SweCRIS! Skipping to next.')
+                print('ERROR: No data for id: ' + projectid + '_' + funder_suffix + ' was found in SweCRIS! Skipping to next.')
                 print('\n')
                 with open(os.getenv("LOGFILE"), 'a') as lf:
-                    lf.write('No data for id: ' + projectid + '_' + funder_suffix + ' was found in SweCRIS! Skipping to next.')
+                    lf.write('ERROR: No data for id: ' + projectid + '_' + funder_suffix + ' was found in SweCRIS! Skipping to next.')
+                errcount += 1
                 continue
         elif source.lower() == 'gdp':
             # Fetch data from GDP (Formas), if not available in the Prisma spreadsheet
@@ -298,7 +271,8 @@ with open(infile) as infile_txt:
             try:
                 gdpdata = requests.get(url=gdp_url, headers=gdp_headers).text
                 if 'Internal server error' in gdpdata:
-                    print('No data for id: ' + projectid + ' was found in GDP! Skipping to next.')
+                    print('ERROR: No data for id: ' + projectid + ' was found in GDP! Skipping to next.')
+                    errcount += 1
                     continue
                 gdpdata = json.loads(gdpdata)
                 print('Got data from GDP!')
@@ -309,14 +283,15 @@ with open(infile) as infile_txt:
                 project_start = gdpdata[0]['startdatum']
                 project_end = gdpdata[0]['slutdatum']
             except requests.exceptions.HTTPError as e:
-                print('No data for id: ' + projectid + ' was found in GDP! Skipping to next.')
+                print('ERROR: No data for id: ' + projectid + ' was found in GDP! Skipping to next.')
                 print('\n')
                 with open(os.getenv("LOGFILE"), 'a') as lf:
-                    lf.write('No data for id: ' + projectid + ' was found in GDP! Skipping to next.')
+                    lf.write('ERROR: No data for id: ' + projectid + ' was found in GDP! Skipping to next.')
+                errcount += 1
                 continue
         else:
-            print('No or wrong Source selected (should be swecris or gdp), exiting!')
-            pdb_stop_session(session_token)
+            print('ERROR: No or wrong Source selected (should be swecris or gdp), exiting!')
+            utils.pdb_stop_session(session_token)
             sys.exit(1)
 
         # Get primary email and ORCID from PDB
@@ -349,7 +324,7 @@ with open(infile) as infile_txt:
                 primary_email = email
                 exit()
         else:
-            print(f"PDB person lookup failed failed with status code {pdbstart_response.status_code}")
+            print(f"ERROR: PDB person lookup failed failed with status code {pdbstart_response.status_code}")
             primary_email = email
    
         # Lookup user in DSW and get Uuid, or create new if user don't exist
@@ -358,9 +333,9 @@ with open(infile) as infile_txt:
         userdata = json.loads(userdata)
         if userdata['_embedded']['users']:
             useruuid = userdata['_embedded']['users'][0]['uuid']
-            print('user exists! id: ' + str(useruuid))
+            print('User exists in DSW! id: ' + str(useruuid))
         else:
-            print('user DOES NOT exist, creating NEW user!')
+            print('User DOES NOT exist, creating NEW user!')
             # Create new user
             try:
                 newuser_url = dswurl + '/users'
@@ -379,17 +354,17 @@ with open(infile) as infile_txt:
                     data_activate = requests.put(url=user_activate_url, headers=headers).text
                     print('User: ' + useruuid + ' has been activated.')
                 except requests.exceptions.HTTPError as e:
-                    print('Could not activate user with e-mail: ' + email + '.')
+                    print('ERROR: Could not activate user with e-mail: ' + email + '.')
                     with open(os.getenv("LOGFILE"), 'a') as lf:
-                        lf.write('Could not activate user: ' + email + '.' + e.response.text)
+                        lf.write('ERROR: Could not activate user: ' + email + '.' + e.response.text)
                     sys.exit(1)
             except requests.exceptions.HTTPError as e:
-                print('Could not create user with e-mail: ' + email + '.')
-                pdb_stop_session(session_token)
+                print('ERROR: Could not create user with e-mail: ' + email + '.')
+                utils.pdb_stop_session(session_token)
                 sys.exit(1)
 
         # Create new dmp
-        print('Creating new DMP with title: ' + project_title + '.')
+        print('Trying to create new DMP with title: ' + project_title + '...')
         try:
             create_dmp_url = dswurl + '/questionnaires'
             create_data = dict(questionTagUuids=[config.get('Paths', 'question.tag.uuids')], packageId=packageid,
@@ -399,12 +374,12 @@ with open(infile) as infile_txt:
             data_create = requests.post(url=create_dmp_url, json=create_data, headers=headers).text
             data_create = json.loads(data_create)
             dmpuuid = data_create['uuid']
-            print('Dmp ' + project_title + ' created with id: ' + dmpuuid)
+            print('DMP created with id: ' + str(dmpuuid))
         except requests.exceptions.HTTPError as e:
-            print('Could not create DMP with name: ' + project_title + '.')
+            print('ERROR: Could not create DMP!')
             with open(os.getenv("LOGFILE"), 'a') as lf:
-                lf.write('Could not create DMP: ' + project_title + '.' + e.response.text + '\n')
-            pdb_stop_session(session_token)
+                lf.write('ERROR: Could not create DMP!\n')
+            utils.pdb_stop_session(session_token)
             sys.exit(1)
 
         # Add content to dmp
@@ -504,12 +479,11 @@ with open(infile) as infile_txt:
                                 funding_dict, funder_dict, project_status_dict, grantid_dict, phase_dict])
         try:
             newdmp_url = dswurl + '/questionnaires/' + dmpuuid + '/content'
-            #print(dmp_data)
             data_newdmp = requests.put(url=newdmp_url, json=dmp_data, headers=headers).text
-            print('DMP ' + dmpuuid + ' updated with content.')
+            print('DMP updated with content.')
         except requests.exceptions.HTTPError as e:
-            print('Could not update DMP with id: ' + dmpuuid + '.')
-            pdb_stop_session(session_token)
+            print('ERROR: Could not update DMP with content.')
+            utils.pdb_stop_session(session_token)
             sys.exit(1)
 
         # Alter ownership of dmp
@@ -522,10 +496,10 @@ with open(infile) as infile_txt:
         try:
             dmpowner_url = dswurl + '/questionnaires/' + dmpuuid + '/share'
             data_dmpowner = requests.put(url=dmpowner_url, json=dmp_owner_data, headers=headers).text
-            print('DMP ' + dmpuuid + ' changed owner to ' + useruuid)
+            print('DMP changed owner to ' + useruuid)
         except requests.exceptions.HTTPError as e:
-            print('Could not alter DMP with id: ' + dmpuuid + '.')
-            pdb_stop_session(session_token)
+            print('ERROR: Could not alter DMP permissions!')
+            utils.pdb_stop_session(session_token)
             sys.exit(1)
 
         # Create Project in Chalmers CRIS (if selected)
@@ -538,6 +512,7 @@ with open(infile) as infile_txt:
             checkdata = json.loads(checkdata)
             if checkdata['TotalCount'] == 1:
                 print("Project " + projectid + " already exists in CRIS. Add DMP manually!")
+                errcount += 1
                 project_cris_id = 0
             else:
                 print("A new CRIS project record will be created for project " + projectid)
@@ -577,7 +552,7 @@ with open(infile) as infile_txt:
                     # person_orghome_name = person_org_crisdata['OrganizationData']['OrganizationParents'][0]['ParentOrganizationData']['DisplayNameSwe']
                     person_org = dict(OrganizationID=person_org_cris_id)
                 except requests.exceptions.HTTPError as e:
-                    print('Person org lookup failed. Skip and add project ' + projectid + ' manually!')
+                    print('ERROR: Person org lookup failed. Skip and add project ' + projectid + ' manually!')
                     print('\n')
                     project_cris_id = 0
                     # Print output to logfile and continue with next
@@ -588,6 +563,7 @@ with open(infile) as infile_txt:
                                 "DSW_UI_URL") + '/projects/' + dmpuuid + '\t' + str(
                                 project_cris_id) + '\t' + cris_project_url + '\n')
                     print('\n')
+                    errcount += 1
                     continue
 
                 person = dict(PersonID=person_cris_id, PersonOrganizations=[person_org], PersonRoleID=1)
@@ -617,7 +593,8 @@ with open(infile) as infile_txt:
                     print('Project ' + projectid + ' created with id: ' + str(project_cris_id))
                     cris_project_url = os.getenv("CRIS_URL") + '/en/project/' + str(project_cris_id)
                 except requests.exceptions.HTTPError as e:
-                    print('Could not create Project with name: ' + project_title + ' in CRIS. Add manually!')
+                    print('ERROR: Could not create Project with name: ' + project_title + ' in CRIS. Add manually!')
+                    errcount += 1
                     # Print output to logfile and continue with next
                     current_date = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")
                     with open(os.getenv("LOGFILE"), 'a') as lf:
@@ -631,11 +608,11 @@ with open(infile) as infile_txt:
         # Create and send email if all is fine (and we have selected to do do)
         if args.sendEmails.lower().strip() == "y":
             try:
-                send_html_email(email, dname, 'Gratulerar till beviljat forskningsbidrag! / Congratulations on your grant approval!', email_template, projectid, project_title, dmp_url, cris_project_url)
+                utils.send_html_email(email, dname, 'Gratulerar till beviljat forskningsbidrag! / Congratulations on your grant approval!', email_template, projectid, project_title, dmp_url, cris_project_url)
             except Exception as e:
-                print(f"Failed to send email to {email}: {e}")
+                print(f"ERROR: Failed to send email to {email}: {e}")
                 with open(os.getenv("LOGFILE"), 'a') as lf:
-                    lf.write(f"Failed to send email to {email}: {e}\n")
+                    lf.write(f"ERROR: Failed to send email to {email}: {e}\n")
 
         # Ready
         # Print output to logfile and continue with next
@@ -649,6 +626,6 @@ with open(infile) as infile_txt:
         lcounter += 1
 
 print('\n******************************\n')
-print('All done! Processed ' + str(lcounter) + ' projects. Output has been logged to ' + str(logfile) + '. Exiting...\n')
-pdb_stop_session(session_token)
+print('All done! Processed ' + str(lcounter) + ' projects, with ' + str(errcount) + ' issue(s). Output has been logged to ' + str(logfile) + '. If there were issues (see above), these have to be fixed manually. Exiting now...\n')
+utils.pdb_stop_session(session_token)
 exit()
