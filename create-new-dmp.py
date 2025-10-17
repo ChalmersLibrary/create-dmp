@@ -7,6 +7,7 @@ import sys
 from dotenv import load_dotenv
 import csv
 from datetime import datetime
+import time
 import os
 import random
 import string
@@ -36,6 +37,7 @@ smtp_password = os.getenv("SMPT_PASSWORD")
 email_sender = os.getenv("EMAIL_SENDER")
 send_emails = ''
 email_template = ''
+pdb_session_token = ''
 
 # Read config
 config = configparser.ConfigParser()
@@ -71,6 +73,8 @@ if os.path.exists(infile) is False and os.path.isfile(infile) is False and os.ac
     exit()
 else:
     print("Input file " + infile + " exists and is readable.")
+if os.access('.', os.W_OK):
+    print("Script has write access to the current directory.")
 if args.sendEmails.lower().strip() == 'y' and utils.test_smtp_connection() is False:
     print("ERROR: Could not connect to SMTP server using existing settings in .env, exiting!")
     exit()
@@ -97,53 +101,16 @@ else:
 
     # debug
     cc = ''
-    #cc = 'jeremy.azzopardi@chalmers.se'
 
 # Start a PDB session and login for use later
-pdb_url = os.getenv("PDB_API_URL")
-pdb_user = os.getenv("PDB_USER")
-pdb_pw = os.getenv("PDB_PW")
+pdb_session_token = utils.pdb_start_session()
 
-pdb_headers = {
-    "Content-Type": "application/json"
-}
-
-pdbstart_payload = {
-    "function": "session_start",
-    "params": []
-}
-
-pdbstart_response = requests.post(pdb_url, headers=pdb_headers, data=json.dumps(pdbstart_payload))
-if pdbstart_response.status_code == 200:
-    try:
-        pdbstart_result = pdbstart_response.json()
-        session_token = pdbstart_result['session']
-        print("PDB session started successfully")
-    except ValueError:
-        print(pdbstart_response.text)
-        exit()
-else:
-    print(f"ERROR: PDB session start request failed with status code {pdbstart_response.status_code}")
-    exit()
-
-pdblogin_payload = {
-    "function": "session_auth_login",
-    "params": [pdb_user,pdb_pw],
-    "session": session_token
-}
-
-pdblogin_response = requests.post(pdb_url, headers=pdb_headers, data=json.dumps(pdblogin_payload))
-if pdblogin_response.status_code == 200:
-    try:
-        pdlogin_result = pdblogin_response.json()
-        print("PDB login succeeded")
-    except ValueError:
-        print(pdblogin_response.text)
-        exit()
-else:
-    print(f"ERROR: PDB login failed with status code {pdblogin_response.status_code}")
-    utils.pdb_stop_session(session_token)
-    exit()
+# Login to PDB
+if pdb_session_token:
+    utils.pdb_login(pdb_session_token)
+else: 
+    print('ERROR: Could not log in to PDB (no session exists), exiting!')
+    sys.exit(1)
 
 # DSW authentication
 dsw_token = ''
@@ -157,7 +124,7 @@ except requests.exceptions.HTTPError as e:
     print('ERROR: Could not authenticate with DSW, user: ' + dswuser + ' , existing.')
     with open(os.getenv("LOGFILE"), 'a') as lf:
         lf.write('ERROR: Could not authenticate with DSW, user: ' + dswuser + ' , exiting: ' + e.response.text)
-    utils.pdb_stop_session(session_token)
+    utils.pdb_stop_session(pdb_session_token)
     sys.exit(1)
 
 headers = {'Accept': 'application/json',
@@ -173,6 +140,8 @@ with open(infile) as infile_txt:
     line_count = len(rows)
     errcount = 0
 
+    print('\nEverything looks good!\n')
+    time.sleep(3)
     print('\n******************************\n')
     print("We are about to process " + str(line_count) + " projects, using the following settings:\n")
     print("Input file: " + infile)
@@ -187,7 +156,8 @@ with open(infile) as infile_txt:
     print("CRIS URL: " + os.getenv("CRIS_URL"))
     print("Logfile: " + logfile)
     print("\n")
-    print("Is this correct, shall we continue? (y/n)")
+    print("Is this correct, shall we continue?")
+    print("Choose y(es) or n(o) and press ENTER...")
     
     yes = {'y', 'yes', 'ye', 'j', 'ja', ''}
     no = {'no', 'n', 'nej'}
@@ -197,11 +167,11 @@ with open(infile) as infile_txt:
         print('Ok, continuing...\n')
     elif choice in no:
         print('Ok, exiting...')
-        utils.pdb_stop_session(session_token)
+        utils.pdb_stop_session(pdb_session_token)
         exit()
     else:
         print('Invalid input, exiting...')
-        utils.pdb_stop_session(session_token)
+        utils.pdb_stop_session(pdb_session_token)
         exit()
 
     for row in rows:
@@ -291,7 +261,7 @@ with open(infile) as infile_txt:
                 continue
         else:
             print('ERROR: No or wrong Source selected (should be swecris or gdp), exiting!')
-            utils.pdb_stop_session(session_token)
+            utils.pdb_stop_session(pdb_session_token)
             sys.exit(1)
 
         # Get primary email and ORCID from PDB
@@ -306,13 +276,19 @@ with open(infile) as infile_txt:
                         "primary_email": True
                     }
                 ],
-                "session": session_token
+                "session": pdb_session_token
+        }
+
+        pdb_url = os.getenv("PDB_API_URL")
+        pdb_headers = {
+            "Content-Type": "application/json"
         }
 
         pdbperson_response = requests.post(pdb_url, headers=pdb_headers, data=json.dumps(pdbperson_payload))
         if pdbperson_response.status_code == 200:
             try:
                 pdbperson_result = pdbperson_response.json()
+                print(pdbperson_result)
                 pdbperson = pdbperson_result['result'][0]
                 primary_email = pdbperson['primary_email']
                 print('Primary email in PDB: ' + primary_email)
@@ -322,9 +298,10 @@ with open(infile) as infile_txt:
             except ValueError:
                 print(pdbperson_response.text)
                 primary_email = email
+                utils.pdb_stop_session(pdb_session_token)
                 exit()
         else:
-            print(f"ERROR: PDB person lookup failed failed with status code {pdbstart_response.status_code}")
+            print(f"ERROR: PDB person lookup failed failed with status code {pdbperson_response.status_code}")
             primary_email = email
    
         # Lookup user in DSW and get Uuid, or create new if user don't exist
@@ -360,7 +337,7 @@ with open(infile) as infile_txt:
                     sys.exit(1)
             except requests.exceptions.HTTPError as e:
                 print('ERROR: Could not create user with e-mail: ' + email + '.')
-                utils.pdb_stop_session(session_token)
+                utils.pdb_stop_session(pdb_session_token)
                 sys.exit(1)
 
         # Create new dmp
@@ -379,7 +356,7 @@ with open(infile) as infile_txt:
             print('ERROR: Could not create DMP!')
             with open(os.getenv("LOGFILE"), 'a') as lf:
                 lf.write('ERROR: Could not create DMP!\n')
-            utils.pdb_stop_session(session_token)
+            utils.pdb_stop_session(pdb_session_token)
             sys.exit(1)
 
         # Add content to dmp
@@ -483,7 +460,7 @@ with open(infile) as infile_txt:
             print('DMP updated with content.')
         except requests.exceptions.HTTPError as e:
             print('ERROR: Could not update DMP with content.')
-            utils.pdb_stop_session(session_token)
+            utils.pdb_stop_session(pdb_session_token)
             sys.exit(1)
 
         # Alter ownership of dmp
@@ -499,7 +476,7 @@ with open(infile) as infile_txt:
             print('DMP changed owner to ' + useruuid)
         except requests.exceptions.HTTPError as e:
             print('ERROR: Could not alter DMP permissions!')
-            utils.pdb_stop_session(session_token)
+            utils.pdb_stop_session(pdb_session_token)
             sys.exit(1)
 
         # Create Project in Chalmers CRIS (if selected)
@@ -627,5 +604,5 @@ with open(infile) as infile_txt:
 
 print('\n******************************\n')
 print('All done! Processed ' + str(lcounter) + ' projects, with ' + str(errcount) + ' issue(s). Output has been logged to ' + str(logfile) + '. If there were issues (see above), these have to be fixed manually. Exiting now...\n')
-utils.pdb_stop_session(session_token)
+utils.pdb_stop_session(pdb_session_token)
 exit()
