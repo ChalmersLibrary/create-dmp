@@ -70,7 +70,7 @@ for _ in range(6):  # Adjust the number of asterisks here
     time.sleep(1)
 print("\n")
 
-print("\u2713 Python version: ", sys.version)
+print("\u2713 Python version: " + str(sys.version_info.major) + "." + str(sys.version_info.minor) + "." + str(sys.version_info.micro))
 
 # Validate input etc.
 if funder_name not in ['formas', 'vr']:
@@ -172,12 +172,12 @@ with open(infile) as infile_txt:
     print("\n")
     print("We are about to process " + str(line_count) + " projects, using the following settings:\n")
     print("Input file: " + infile)
-    print("Funder: " + funder_name)
+    print("Funder: " +  ("Vetenskapsrådet (VR)" if funder_name == "vr" else "Formas"))
     print("Source for project data: " + source)
     if source == 'gdp':
         print("GDP API URL: " + gdp_base_url)
-    print("Create CRIS project records: " + create_cris_projects)
-    print("Send e-mail to users automatically: " + args.sendEmails.lower().strip())
+    print("Create CRIS project records: " + ("Yes" if create_cris_projects == "true" else "No"))
+    print("Send e-mail to users automatically: " + ("Yes" if args.sendEmails.lower().strip() == "y" else "No"))
     print("E-mail template: " + email_template)
     print("E-mail sender: " + email_sender)
     print("DSW URL: " + dswurl)
