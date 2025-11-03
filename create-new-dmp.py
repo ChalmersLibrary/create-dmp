@@ -100,7 +100,8 @@ else:
 # Define funder specific params
 if funder_name == 'formas':
     source = 'gdp'
-    gdp_base_url = 'https://test.api.formas.se/gdp/v2/finansieradeaktiviteter'
+    gdp_base_url = 'https://api.formas.se/gdp_formas/finansieradeaktiviteter'
+    gdp_api_key = os.getenv("GDP_API_KEY_FORMAS")
     email_template = 'templates/mail_template_formas.html'
     funderid = 'https://ror.org/03pjs1y45'
     funder_suffix = 'Formas'
@@ -108,7 +109,8 @@ if funder_name == 'formas':
     cris_funder_id = '7f93013d-43bd-40f0-b0eb-fe21dc95c745'
 elif funder_name == 'vr':
     source = 'gdp'
-    gdp_base_url = 'https://test.api.vr.se/gdp/v2/finansieradeaktiviteter'
+    gdp_base_url = 'https://api.vr.se/gdp_vr/finansieradeaktiviteter'
+    gdp_api_key = os.getenv("GDP_API_KEY_VR")
     email_template = 'templates/mail_template_vr.html'
     funderid = 'https://ror.org/03yrm4c26'
     funder_suffix = 'VR'
@@ -172,6 +174,8 @@ with open(infile) as infile_txt:
     print("Input file: " + infile)
     print("Funder: " + funder_name)
     print("Source for project data: " + source)
+    if source == 'gdp':
+        print("GDP API URL: " + gdp_base_url)
     print("Create CRIS project records: " + create_cris_projects)
     print("Send e-mail to users automatically: " + args.sendEmails.lower().strip())
     print("E-mail template: " + email_template)
@@ -313,7 +317,7 @@ with open(infile) as infile_txt:
         if pdbperson_response.status_code == 200:
             try:
                 pdbperson_result = pdbperson_response.json()
-                print(pdbperson_result)
+                #print(pdbperson_result)
                 pdbperson = pdbperson_result['result'][0]
                 primary_email = pdbperson['primary_email']
                 print('Primary email in PDB: ' + primary_email)
@@ -366,7 +370,7 @@ with open(infile) as infile_txt:
                 sys.exit(1)
 
         # Create new dmp
-        print('Trying to create new DMP with title: ' + project_title + '...')
+        print('Trying to create new DMP with title: ' + project_title)
         try:
             create_dmp_url = dswurl + '/questionnaires'
             create_data = dict(questionTagUuids=[config.get('Paths', 'question.tag.uuids')], packageId=packageid,
@@ -512,7 +516,7 @@ with open(infile) as infile_txt:
             checkdata = requests.get(url=cris_check_url, headers={'Accept': 'application/json'}).text
             checkdata = json.loads(checkdata)
             if checkdata['TotalCount'] == 1:
-                print("Project " + projectid + " already exists in CRIS. Add DMP manually!")
+                print("\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m Project " + projectid + " already exists in CRIS. Add DMP manually!")
                 errcount += 1
                 project_cris_id = 0
             else:

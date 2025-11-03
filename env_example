@@ -20,4 +20,5 @@ EMAIL_SENDER=dataoffice@chalmers.se
 PDB_API_URL=https://pdb-api-url.chalmers.se
 PDB_USER=xxxxxx
 PDB_PW=xxxxxxxxxxxx
-GDP_API_KEY=xxxxxxxxxxxxxxxxx
+GDP_API_KEY_FORMAS=xxxxxxxxxxxxxxxx
+GDP_API_KEY_VR=xxxxxxxxxxxxxxxxxx
