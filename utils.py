@@ -61,7 +61,7 @@ def pdb_start_session():
         try:
             pdbstart_result = pdbstart_response.json()
             session_token = pdbstart_result['session']
-            print("PDB session started successfully.")
+            print("\u2713 PDB session started successfully.")
             return session_token
         except ValueError:
             print(pdbstart_response.text)
@@ -84,7 +84,7 @@ def pdb_login(session_token):
     if pdblogin_response.status_code == 200:
         try:
             pdblogin_result = pdblogin_response.json()
-            print("PDB login successful.")
+            print("\u2713 PDB login successful.")
         except ValueError:
             print(pdblogin_response.text)
             exit()
@@ -114,3 +114,36 @@ def pdb_stop_session(session_token):
         print(f"PDB session terminate request failed with status code {pdbstop_response.status_code}")
         exit()
 
+def validate_input_file(filepath):
+    """
+    Validates that a file is:
+    - Readable and UTF-8 encoded
+    - Contains at least 3 tab-separated columns per line
+    - Uses Unix line feed (\n) for line endings
+    """
+    try:
+        # Check UTF-8 readability and column structure
+        with open(filepath, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+        for i, line in enumerate(lines, 1):
+            columns = line.rstrip('\n').split('\t')
+            if len(columns) < 3:
+                print(f"Line {i} error: Expected at least 3 columns, found {len(columns)}")
+                return False
+    except (FileNotFoundError, PermissionError, UnicodeDecodeError) as e:
+        print(f"File access error: {e}")
+        return False
+
+    try:
+        # Check for Unix line endings
+        with open(filepath, "rb") as f:
+            for i, line in enumerate(f, 1):
+                if not line.endswith(b'\n'):
+                    print(f"Line {i} error: Does not end with Unix LF")
+                    return False
+    except Exception as e:
+        print(f"Binary read error: {e}")
+        return False
+
+    #print("File passed all checks.")
+    return True

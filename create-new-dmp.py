@@ -20,7 +20,7 @@ import utils
 
 ## Script for creating new DMPs in Chalmers DSW from a tab-delimited input file
 ## See README.md for details
-## Require DSW >=4.22.0 and PDB access. Change IntegrationLegacyType to IntegrationType if DSW version is < 4.22.0.
+## Require DSW >=4.22.0 and PDB/SMTP access. Change IntegrationLegacyType to IntegrationType if DSW version is < 4.22.0.
 
 # Settings
 load_dotenv()
@@ -29,15 +29,18 @@ dswuser = os.getenv("DSW_USER")
 dswpw = os.getenv("DSW_PW")
 packageid = os.getenv("PACKAGE_ID")
 templateid = os.getenv("TEMPLATE_ID")
-create_cris_projects = os.getenv("CREATE_CRIS_PROJECTS")
 smtp_server = os.getenv("SMTP_SERVER")
 smtp_port = os.getenv("SMTP_PORT")
 smtp_user = os.getenv("SMTP_USER")
 smtp_password = os.getenv("SMPT_PASSWORD")
 email_sender = os.getenv("EMAIL_SENDER")
+create_cris_projects = 'true'
+cris_funder_id = ''
 send_emails = ''
 email_template = ''
 pdb_session_token = ''
+gdp_base_url = ''
+gdp_api_key = os.getenv("GDP_API_KEY")
 
 # Read config
 config = configparser.ConfigParser()
@@ -59,45 +62,62 @@ funder_name = args.funder.lower().strip()
 # Create logfile, example: formas_20231001_121212.log
 logfile = funder_name + '_' + datetime.now().strftime("%Y%m%d_%H%M%S") + '.log'
 
-print('\n')
+print("\nChecking that all looks good before continuing")
+#print("\n", end="")
+for _ in range(6):  # Adjust the number of asterisks here
+    print(".", end="", flush=True)
+    time.sleep(0.1)  # Delay in seconds
+    time.sleep(1)
+print("\n")
+
+print("\u2713 Python version: ", sys.version)
 
 # Validate input etc.
 if funder_name not in ['formas', 'vr']:
-    print('ERROR: Funder has to be one of "formas", "vr". Please correct this and try again!')
+    print('\033[91m❌\033[0m ERROR: Funder has to be one of "formas", "vr". Please correct this and try again!')
     exit()
 if args.sendEmails.lower().strip() == 'y' and (not smtp_server or not smtp_port or not smtp_user or not smtp_password or not email_sender):
-    print('ERROR: You have selected to send e-mails, but SMTP settings are not complete in .env file. Please correct this and try again!')
+    print('\033[91m❌\033[0m ERROR: You have selected to send e-mails, but SMTP settings are not complete in .env file. Please correct this and try again!')
     exit()
-if os.path.exists(infile) is False and os.path.isfile(infile) is False and os.access(infile, os.R_OK) is False:
-    print("ERROR: Input file " + infile + " does not exist, is not readable or it is not a proper file, exiting!")
+if os.path.exists(infile) is False or utils.validate_input_file(infile) is False:
+    print("\033[91m❌\033[0m ERROR: Input file " + infile + " does not exist, is not readable or it is not in a proper format, exiting!")
     exit()
 else:
-    print("Input file " + infile + " exists and is readable.")
+    print("\u2713 Input file " + infile + " exists, is readable and looks fine.")
 if os.access('.', os.W_OK):
-    print("Script has write access to the current directory.")
+    print("\u2713 Script has write access to the current directory.")
 if args.sendEmails.lower().strip() == 'y' and utils.test_smtp_connection() is False:
-    print("ERROR: Could not connect to SMTP server using existing settings in .env, exiting!")
+    print("\033[91m❌\033[0m ERROR: Could not connect to SMTP server using existing settings in .env, exiting!")
     exit()
+else:
+    print("\u2713 SMTP mail server connected succesfully.")
+
+if args.updateCRIS.lower().strip() == 'y':
+    create_cris_projects = 'true'
+else:
+    create_cris_projects = 'false'
 
 # Define funder specific params
 if funder_name == 'formas':
     source = 'gdp'
+    gdp_base_url = 'https://test.api.formas.se/gdp/v2/finansieradeaktiviteter'
     email_template = 'templates/mail_template_formas.html'
     funderid = 'https://ror.org/03pjs1y45'
     funder_suffix = 'Formas'
     funder_display_name = 'Formas'
+    cris_funder_id = '7f93013d-43bd-40f0-b0eb-fe21dc95c745'
 elif funder_name == 'vr':
-    source = 'swecris'
+    source = 'gdp'
+    gdp_base_url = 'https://test.api.vr.se/gdp/v2/finansieradeaktiviteter'
     email_template = 'templates/mail_template_vr.html'
     funderid = 'https://ror.org/03yrm4c26'
     funder_suffix = 'VR'
     funder_display_name = 'Vetenskapsrådet / Swedish Research Council (VR)'
+    cris_funder_id = '0d84752e-ee44-485f-b889-bcbe3cf6b095'
 else:
     source = 'swecris'
     email_template = 'templates/mail_template_generic.html'
-    funderid = os.getenv("FUNDER_ID")
-    funder_suffix = os.getenv("FUNDER_SUFFIX")
-    funder_display_name = os.getenv("FUNDER_NAME")
+    create_cris_projects = 'false'
 
     # debug
     cc = ''
@@ -109,7 +129,7 @@ pdb_session_token = utils.pdb_start_session()
 if pdb_session_token:
     utils.pdb_login(pdb_session_token)
 else: 
-    print('ERROR: Could not log in to PDB (no session exists), exiting!')
+    print('\033[91m❌\033[0m ERROR: Could not log in to PDB (no session exists), exiting!')
     sys.exit(1)
 
 # DSW authentication
@@ -121,9 +141,9 @@ try:
     data_auth = json.loads(data_auth)
     dsw_token = data_auth['token']
 except requests.exceptions.HTTPError as e:
-    print('ERROR: Could not authenticate with DSW, user: ' + dswuser + ' , existing.')
+    print('\033[91m❌\033[0m ERROR: Could not authenticate with DSW, user: ' + dswuser + ' , existing.')
     with open(os.getenv("LOGFILE"), 'a') as lf:
-        lf.write('ERROR: Could not authenticate with DSW, user: ' + dswuser + ' , exiting: ' + e.response.text)
+        lf.write('\033[91m❌\033[0m ERROR: Could not authenticate with DSW, user: ' + dswuser + ' , exiting: ' + e.response.text)
     utils.pdb_stop_session(pdb_session_token)
     sys.exit(1)
 
@@ -141,23 +161,29 @@ with open(infile) as infile_txt:
     errcount = 0
 
     print('\nEverything looks good!\n')
-    time.sleep(3)
-    print('\n******************************\n')
+    time.sleep(2)
+    print("\n", end="")
+    for _ in range(40):  # Adjust the number of asterisks here
+        print("*", end="", flush=True)
+        time.sleep(0.05)  # Delay in seconds
+    time.sleep(1)
+    print("\n")
     print("We are about to process " + str(line_count) + " projects, using the following settings:\n")
     print("Input file: " + infile)
     print("Funder: " + funder_name)
     print("Source for project data: " + source)
-    print("Create CRIS project records: " + args.updateCRIS.lower().strip())
+    print("Create CRIS project records: " + create_cris_projects)
     print("Send e-mail to users automatically: " + args.sendEmails.lower().strip())
     print("E-mail template: " + email_template)
+    print("E-mail sender: " + email_sender)
     print("DSW URL: " + dswurl)
     print("KM Package ID: " + packageid)
     print("Template ID: " + templateid)
     print("CRIS URL: " + os.getenv("CRIS_URL"))
     print("Logfile: " + logfile)
     print("\n")
-    print("Is this correct, shall we continue?")
-    print("Choose y(es) or n(o) and press ENTER...")
+    print("Is all the above correct? PLEASE CHECK THIS CAREFULLY!\n")
+    print("Choose y(es) or n(o) and press ENTER to continue...")
     
     yes = {'y', 'yes', 'ye', 'j', 'ja', ''}
     no = {'no', 'n', 'nej'}
@@ -170,7 +196,7 @@ with open(infile) as infile_txt:
         utils.pdb_stop_session(pdb_session_token)
         exit()
     else:
-        print('Invalid input, exiting...')
+        print('\033[91m❌\033[0m Invalid input, exiting...')
         utils.pdb_stop_session(pdb_session_token)
         exit()
 
@@ -186,7 +212,6 @@ with open(infile) as infile_txt:
         email = row[2]
         #orcid = row[3]
         orcid = ''
-        #cth_personid = row[3]
         lname = name.split()[0].strip()
         fname = name.split()[1].strip()
         dname = fname + ' ' + lname
@@ -234,10 +259,10 @@ with open(infile) as infile_txt:
                 errcount += 1
                 continue
         elif source.lower() == 'gdp':
-            # Fetch data from GDP (Formas), if not available in the Prisma spreadsheet
-            gdp_url = os.getenv("GDP_BASE_URL") + '?diarienummer=' + projectid
+            # Fetch data from GDP, if not available in the Prisma spreadsheet
+            gdp_url = gdp_base_url + '?diarienummer=' + projectid
             gdp_headers = {'Accept': 'application/json',
-                            'Authorization': os.getenv("GDP_API_KEY")}
+                            'Authorization': gdp_api_key}
             try:
                 gdpdata = requests.get(url=gdp_url, headers=gdp_headers).text
                 if 'Internal server error' in gdpdata:
@@ -370,7 +395,6 @@ with open(infile) as infile_txt:
                           value=dict(value=[config.get('Paths', 'contributor.uuid')], type='ItemListReply'),
                           uuid=str(uuid.uuid4()),
                           type='SetReplyEvent')
-
         name_dict = dict(
             path=config.get('Paths', 'name.path'),
             phasesAnsweredIndication=phases_answered_dict,
@@ -484,7 +508,7 @@ with open(infile) as infile_txt:
         if create_cris_projects == 'true':
             dmp_url = os.getenv("DSW_UI_URL") + '/projects/' + dmpuuid
             # Check if Project already exists
-            cris_check_url = os.getenv("CRIS_API_URL") + '/ProjectSearch?query="' + projectid + '"+AND+"' + os.getenv("CRIS_FUNDERID") + '"'
+            cris_check_url = os.getenv("CRIS_API_URL") + '/ProjectSearch?query="' + projectid + '"+AND+"' + cris_funder_id + '"'
             checkdata = requests.get(url=cris_check_url, headers={'Accept': 'application/json'}).text
             checkdata = json.loads(checkdata)
             if checkdata['TotalCount'] == 1:
@@ -495,18 +519,15 @@ with open(infile) as infile_txt:
                 print("A new CRIS project record will be created for project " + projectid)
                 # Create CRIS Project object
                 current_date = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")
-                contract_org = dict(Id=os.getenv("CRIS_FUNDERID"))
+                contract_org = dict(Id=cris_funder_id)
                 contract_id = dict(ProjectContractIdentifierID=2, ProjectContractIdentifierValue=projectid)
                 contract = dict(ContractSource='dsw', ContractStartDate=project_start[0:10] + 'T00:00:00',
                                 ContractEndDate=project_end[0:10] + 'T00:00:00', DmpValue=dmp_url, DmpVersion=1,
-                                ContractOrganization=contract_org, OrganizationID=os.getenv("CRIS_FUNDERID"),
+                                ContractOrganization=contract_org, OrganizationID=cris_funder_id,
                                 ContractIdentifiers=[contract_id], CreatedDate=current_date, CreatedBy='dsw')
                 
                 # Get Person from CRIS using e-mail address
                 # If we already have Research Person IDs, the first step could be skipped
-
-                # debug (we need to fix this)
-                #primary_email = 'aurban@chalmers.se'
 
                 person_get_url = os.getenv("CRIS_PERSON_URL") + '/Persons?idValue=' + primary_email + '&idTypeValue=EMAIL'
                 person_crisdata = requests.get(url=person_get_url, headers={'Accept': 'application/json'}).text
@@ -570,7 +591,7 @@ with open(infile) as infile_txt:
                     print('Project ' + projectid + ' created with id: ' + str(project_cris_id))
                     cris_project_url = os.getenv("CRIS_URL") + '/en/project/' + str(project_cris_id)
                 except requests.exceptions.HTTPError as e:
-                    print('ERROR: Could not create Project with name: ' + project_title + ' in CRIS. Add manually!')
+                    print('\033[91m!\033[0m Could NOT create Project with name: ' + project_title + ' in CRIS. Add this manually!')
                     errcount += 1
                     # Print output to logfile and continue with next
                     current_date = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")
