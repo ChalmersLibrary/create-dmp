@@ -20,7 +20,7 @@ Please use the staging environment (dsw-staging.xxx) and (at least initially) se
 
 *Install and run the app*   
 * Use `git clone https://github.com/ChalmersLibrary/create-dmp.git´ to download the code into a local directory.    
-* Create an **.env** settings file in `´create_dmp/. Use env_examples as a template.   
+* Create an **.env** settings file in the create_dmp/ directory. Use env_example as a template.   
 * Install the app by running `pip install .´ in the root directory.   
 * Execute directly from command line, i.e. `create-dmp-i formas_251030.txt -f formas´   
 * Input files should ideally be put in the root directory (and log files are created there too).  
