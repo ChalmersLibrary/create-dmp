@@ -1,0 +1,4 @@
+2021-12345	Einstein Albert	einstein@chalmers.se
+2022-54321	Lovelace Ada	ada@chalmers.se
+2023-12345	Tesla Nikola	tesla@chalmers.se
+2024-654321	Dahlén Gustaf	dahlen@chalmers.se

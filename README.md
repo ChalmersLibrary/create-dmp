@@ -3,7 +3,7 @@ App for creating new DMP:s (projects) in DS Wizard from a tab separated file wit
 Assumes an input file in the following format (tab separated, utf-8/unix lf), especially note name orientation and e-mail address used (should ideally correspond with the e-mail returned by the Idp, but the script will try and look this up from Chalmers PDB):        
 2021-12345\tEinstein Albert\teinstein@chalmers.se\n           
       
-If you copy or export the input data from MS Excel, you might have to use a text editor like Notepad++ to make sure the input file uses UTF-8 and Unix type line feeds.     
+If you copy or export the input data from MS Excel, you might have to use a text editor like Notepad++ to make sure the input file uses UTF-8 and Unix type line feeds. See also sample-input.txt.     
 
 The script will try and create the user (and set permissions) if not already found in DSW. It will also (if selected) send e-mails to the researchers after DMP and CRIS project have been created, using a set of pre-defined, funder specific templates.    
 
