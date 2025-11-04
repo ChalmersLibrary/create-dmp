@@ -64,7 +64,7 @@ logfile = funder_name + '_' + datetime.now().strftime("%Y%m%d_%H%M%S") + '.log'
 
 print("\nChecking that all looks good before continuing")
 #print("\n", end="")
-for _ in range(6):  # Adjust the number of asterisks here
+for _ in range(4):  # Adjust the number of asterisks here
     print(".", end="", flush=True)
     time.sleep(0.1)  # Delay in seconds
     time.sleep(1)
@@ -152,10 +152,11 @@ except requests.exceptions.HTTPError as e:
 headers = {'Accept': 'application/json',
            'Authorization': 'Bearer ' + dsw_token}
 
+lcounter = 0
+
 # Open and read input file
 with open(infile) as infile_txt:
     csv_reader = csv.reader(infile_txt, delimiter='\t')
-    lcounter = 0
 
     # Count number of lines in input file
     rows = list(csv.reader(infile_txt, delimiter='\t'))
@@ -381,6 +382,7 @@ with open(infile) as infile_txt:
             data_create = json.loads(data_create)
             dmpuuid = data_create['uuid']
             print('DMP created with id: ' + str(dmpuuid))
+            lcounter += 1
         except requests.exceptions.HTTPError as e:
             print('ERROR: Could not create DMP!')
             with open(os.getenv("LOGFILE"), 'a') as lf:
@@ -508,15 +510,17 @@ with open(infile) as infile_txt:
             sys.exit(1)
 
         # Create Project in Chalmers CRIS (if selected)
+        # Issue alert(s) to create project manually in case no person is found or something else fails
 
         if create_cris_projects == 'true':
             dmp_url = os.getenv("DSW_UI_URL") + '/projects/' + dmpuuid
+            cris_project_url = ''
             # Check if Project already exists
             cris_check_url = os.getenv("CRIS_API_URL") + '/ProjectSearch?query="' + projectid + '"+AND+"' + cris_funder_id + '"'
             checkdata = requests.get(url=cris_check_url, headers={'Accept': 'application/json'}).text
             checkdata = json.loads(checkdata)
             if checkdata['TotalCount'] == 1:
-                print("\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m Project " + projectid + " already exists in CRIS. Add DMP manually!")
+                print("\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m Project " + projectid + " already exists in CRIS. Add DMP to project " + projectid + "manually!")
                 errcount += 1
                 project_cris_id = 0
             else:
@@ -536,6 +540,22 @@ with open(infile) as infile_txt:
                 person_get_url = os.getenv("CRIS_PERSON_URL") + '/Persons?idValue=' + primary_email + '&idTypeValue=EMAIL'
                 person_crisdata = requests.get(url=person_get_url, headers={'Accept': 'application/json'}).text
                 person_crisdata = json.loads(person_crisdata)
+                # If person is not found in CRIS, skip and add project manually
+                if person_crisdata['TotalCount'] == 0:
+                    print('\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m No Person with e-mail ' + primary_email + ' found in CRIS. Skip and add project ' + projectid + ' manually!')
+                    print('\n')
+                    project_cris_id = 0
+                    # Print output to logfile and continue with next
+                    current_date = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")
+                    with open(logfile, 'a') as lf:
+                        lf.write(
+                            current_date + '\t' + projectid + '\t' + project_title + '\t' + fname + ' ' + lname + '\t' + email + '\t' + os.getenv(
+                                "DSW_UI_URL") + '/projects/' + dmpuuid + '\t' + str(
+                                project_cris_id) + '\t' + cris_project_url + '\n')
+                    print('\n')
+                    errcount += 1
+                    continue
+                
                 person_cris_id = str(person_crisdata['Persons'][0]['Id'])
 
                 persons = []
@@ -554,12 +574,13 @@ with open(infile) as infile_txt:
                     # person_orghome_name = person_org_crisdata['OrganizationData']['OrganizationParents'][0]['ParentOrganizationData']['DisplayNameSwe']
                     person_org = dict(OrganizationID=person_org_cris_id)
                 except requests.exceptions.HTTPError as e:
-                    print('ERROR: Person org lookup failed. Skip and add project ' + projectid + ' manually!')
+                    print('\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m Person org lookup failed. Skip and add project ' + projectid + ' manually!')
+                    errcount += 1
                     print('\n')
                     project_cris_id = 0
                     # Print output to logfile and continue with next
                     current_date = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")
-                    with open(os.getenv("LOGFILE"), 'a') as lf:
+                    with open(logfile, 'a') as lf:
                         lf.write(
                             current_date + '\t' + projectid + '\t' + project_title + '\t' + fname + ' ' + lname + '\t' + email + '\t' + os.getenv(
                                 "DSW_UI_URL") + '/projects/' + dmpuuid + '\t' + str(
@@ -595,11 +616,11 @@ with open(infile) as infile_txt:
                     print('Project ' + projectid + ' created with id: ' + str(project_cris_id))
                     cris_project_url = os.getenv("CRIS_URL") + '/en/project/' + str(project_cris_id)
                 except requests.exceptions.HTTPError as e:
-                    print('\033[91m!\033[0m Could NOT create Project with name: ' + project_title + ' in CRIS. Add this manually!')
+                    print('\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m Could NOT create Project with name: ' + project_title + ' in CRIS. Add ' + projectid + ' manually!')
                     errcount += 1
                     # Print output to logfile and continue with next
                     current_date = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")
-                    with open(os.getenv("LOGFILE"), 'a') as lf:
+                    with open(logfile, 'a') as lf:
                         lf.write(
                             current_date + '\t' + projectid + '\t' + project_title + '\t' + fname + ' ' + lname + '\t' + email + '\t' + os.getenv(
                                 "DSW_UI_URL") + '/projects/' + dmpuuid + '\t' + str(
@@ -625,7 +646,7 @@ with open(infile) as infile_txt:
                     "DSW_UI_URL") + '/projects/' + dmpuuid + '\t' + str(
                     project_cris_id) + '\t' + cris_project_url + '\n')
         print('\n')
-        lcounter += 1
+        #lcounter += 1
 
 print('\n******************************\n')
 print('All done! Processed ' + str(lcounter) + ' projects, with ' + str(errcount) + ' issue(s). Output has been logged to ' + str(logfile) + '. If there were issues (see above), these have to be fixed manually. Exiting now...\n')
