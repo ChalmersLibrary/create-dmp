@@ -1,4 +1,6 @@
-App for creating new DMP:s (projects) in DS Wizard from a tab separated file with metadata and new Project records in Chalmers CRIS (research.chalmers.se), possibly enriched with data from a secondary source, such as SweCRIS or GDP.
+<h1>create-dmp</h1>
+
+App for creating new data management plans (projects, DMP:s) with pre-filled data in Chalmers DS Wizard (dsw.chalmers.se), using a tab separated file with metadata and new Project records in Chalmers CRIS (research.chalmers.se), possibly enriched with data from a secondary source, such as SweCRIS or GDP.
 
 Assumes an input file in the following format (tab separated, utf-8/unix lf), especially note name orientation and e-mail address used (should ideally correspond with the e-mail returned by the Idp, but the script will try and look this up from Chalmers PDB):        
 2021-12345\tEinstein Albert\teinstein@chalmers.se\n           
