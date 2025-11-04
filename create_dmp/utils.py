@@ -6,7 +6,11 @@ import json
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+base_dir = os.path.dirname(os.path.abspath(__file__))
+env_path = os.path.join(base_dir, '.env')
+
+# Load environment variables
+load_dotenv(dotenv_path=env_path)
 smtp_server = os.getenv("SMTP_SERVER")
 smtp_port = os.getenv("SMTP_PORT")
 smtp_user = os.getenv("SMTP_USER")
@@ -21,18 +25,21 @@ def test_smtp_connection():
         with smtplib.SMTP(smtp_server, timeout=10) as server:
             server.starttls()
             server.login(smtp_user, smtp_password)
-            print(f"SMTP server connected successfully.")
             return True
     except Exception as e:
         print(f"Failed to connect to SMTP server: {e}")
         return False
 
-def load_template(mail_template_path):
-    with open(mail_template_path, 'r', encoding='utf-8') as f:
+def load_template(mail_template_filename):
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    template_path = os.path.join(base_dir, 'templates', mail_template_filename)
+    if not os.path.exists(template_path):
+        raise FileNotFoundError(f"Template not found: {template_path}")
+    with open(template_path, 'r', encoding='utf-8') as f:
         return f.read()
 
-def send_html_email(recipient, recipent_name, subject, template_path, projectid, dmptitle, dmpurl, crisurl):
-    html_template = load_template(template_path)
+def send_html_email(recipient, recipent_name, subject, template_filename, projectid, dmptitle, dmpurl, crisurl):
+    html_template = load_template(template_filename)
     html_content = html_template.format(recipent_name=recipent_name, projectid=projectid, dmptitle=dmptitle, dmpurl=dmpurl, crisurl=crisurl)
     msg = MIMEMultipart('alternative')
     msg['From'] = email_sender
@@ -44,7 +51,7 @@ def send_html_email(recipient, recipent_name, subject, template_path, projectid,
             server.starttls()
             server.login(smtp_user, smtp_password)
             server.sendmail(email_sender, recipient, msg.as_string())
-            print("Email sent successfully.")
+            print("Email to " + recipient + " sent successfully.")
     except Exception as e:
         print(f"Failed to send email: {e}")
 

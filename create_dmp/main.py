@@ -16,14 +16,18 @@ import configparser
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
-import utils
+from . import utils
 
 ## Script for creating new DMPs in Chalmers DSW from a tab-delimited input file
 ## See README.md for details
 ## Require DSW >=4.22.0 and PDB/SMTP access. Change IntegrationLegacyType to IntegrationType if DSW version is < 4.22.0.
 
 # Settings
-load_dotenv()
+base_dir = os.path.dirname(os.path.abspath(__file__))
+env_path = os.path.join(base_dir, '.env')
+
+# Load environment variables
+load_dotenv(dotenv_path=env_path)
 dswurl = os.getenv("DSW_URL")
 dswuser = os.getenv("DSW_USER")
 dswpw = os.getenv("DSW_PW")
@@ -44,10 +48,15 @@ gdp_api_key = os.getenv("GDP_API_KEY")
 
 # Read config
 config = configparser.ConfigParser()
-config.read_file(open(r'create-new-dmp.conf'))
+# Get the directory of the current script
+base_dir = os.path.dirname(os.path.abspath(__file__))
+config_path = os.path.join(base_dir, 'create-new-dmp.conf')
+# Load the config file
+with open(config_path) as f:
+    config.read_file(f)
 
 # Command line params
-parser = ArgumentParser(description='Script for creating new DMP(s) and Chalmers CRIS project records from funder grant data. \nUse as (example): python3 create-new-dmp.py -i formas_251001.txt -f formas -u y -e y',
+parser = ArgumentParser(description='App for creating new DMP(s) and Chalmers CRIS project records from funder grant data. \nUse as (example): create-dmp -i formas_251001.txt -f formas -u y -e y',
                         formatter_class=ArgumentDefaultsHelpFormatter)
 parser.add_argument('-i', '--infile', help='Input file, tab-delimited, with columns: ProjectID, Name (inverted), Email', required=True)
 parser.add_argument('-f', '--funder', help='Funder name, e.g. formas or vr', required=True)
@@ -102,7 +111,7 @@ if funder_name == 'formas':
     source = 'gdp'
     gdp_base_url = 'https://api.formas.se/gdp_formas/finansieradeaktiviteter'
     gdp_api_key = os.getenv("GDP_API_KEY_FORMAS")
-    email_template = 'templates/mail_template_formas.html'
+    email_template = 'mail_template_formas.html'
     funderid = 'https://ror.org/03pjs1y45'
     funder_suffix = 'Formas'
     funder_display_name = 'Formas'
@@ -111,14 +120,14 @@ elif funder_name == 'vr':
     source = 'gdp'
     gdp_base_url = 'https://api.vr.se/gdp_vr/finansieradeaktiviteter'
     gdp_api_key = os.getenv("GDP_API_KEY_VR")
-    email_template = 'templates/mail_template_vr.html'
+    email_template = 'mail_template_vr.html'
     funderid = 'https://ror.org/03yrm4c26'
     funder_suffix = 'VR'
     funder_display_name = 'Vetenskapsrådet / Swedish Research Council (VR)'
     cris_funder_id = '0d84752e-ee44-485f-b889-bcbe3cf6b095'
 else:
     source = 'swecris'
-    email_template = 'templates/mail_template_generic.html'
+    email_template = 'mail_template_generic.html'
     create_cris_projects = 'false'
 
     # debug
@@ -144,7 +153,7 @@ try:
     dsw_token = data_auth['token']
 except requests.exceptions.HTTPError as e:
     print('\033[91m❌\033[0m ERROR: Could not authenticate with DSW, user: ' + dswuser + ' , existing.')
-    with open(os.getenv("LOGFILE"), 'a') as lf:
+    with open(logfile, 'a') as lf:
         lf.write('\033[91m❌\033[0m ERROR: Could not authenticate with DSW, user: ' + dswuser + ' , exiting: ' + e.response.text)
     utils.pdb_stop_session(pdb_session_token)
     sys.exit(1)
@@ -188,11 +197,11 @@ with open(infile) as infile_txt:
     print("Logfile: " + logfile)
     print("\n")
     print("Is all the above correct? PLEASE CHECK THIS CAREFULLY!\n")
-    print("Choose y(es) or n(o) and press ENTER to continue...")
+    print("Choose Y/n and press ENTER to continue...")
     
-    yes = {'y', 'yes', 'ye', 'j', 'ja', ''}
-    no = {'no', 'n', 'nej'}
-    choice = input().lower()
+    yes = {'Y'}
+    no = {'no', 'n', 'nej', 'No', 'NEJ', 'N'}
+    choice = input().strip()
     
     if choice in yes:
         print('Ok, continuing...\n')
@@ -259,7 +268,7 @@ with open(infile) as infile_txt:
             except requests.exceptions.HTTPError as e:
                 print('ERROR: No data for id: ' + projectid + '_' + funder_suffix + ' was found in SweCRIS! Skipping to next.')
                 print('\n')
-                with open(os.getenv("LOGFILE"), 'a') as lf:
+                with open(logfile, 'a') as lf:
                     lf.write('ERROR: No data for id: ' + projectid + '_' + funder_suffix + ' was found in SweCRIS! Skipping to next.')
                 errcount += 1
                 continue
@@ -285,7 +294,7 @@ with open(infile) as infile_txt:
             except requests.exceptions.HTTPError as e:
                 print('ERROR: No data for id: ' + projectid + ' was found in GDP! Skipping to next.')
                 print('\n')
-                with open(os.getenv("LOGFILE"), 'a') as lf:
+                with open(logfile, 'a') as lf:
                     lf.write('ERROR: No data for id: ' + projectid + ' was found in GDP! Skipping to next.')
                 errcount += 1
                 continue
@@ -362,7 +371,7 @@ with open(infile) as infile_txt:
                     print('User: ' + useruuid + ' has been activated.')
                 except requests.exceptions.HTTPError as e:
                     print('ERROR: Could not activate user with e-mail: ' + email + '.')
-                    with open(os.getenv("LOGFILE"), 'a') as lf:
+                    with open(logfile, 'a') as lf:
                         lf.write('ERROR: Could not activate user: ' + email + '.' + e.response.text)
                     sys.exit(1)
             except requests.exceptions.HTTPError as e:
@@ -385,7 +394,7 @@ with open(infile) as infile_txt:
             lcounter += 1
         except requests.exceptions.HTTPError as e:
             print('ERROR: Could not create DMP!')
-            with open(os.getenv("LOGFILE"), 'a') as lf:
+            with open(logfile, 'a') as lf:
                 lf.write('ERROR: Could not create DMP!\n')
             utils.pdb_stop_session(pdb_session_token)
             sys.exit(1)
@@ -545,8 +554,17 @@ with open(infile) as infile_txt:
                     print('\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m No Person with e-mail ' + primary_email + ' found in CRIS. Skip and add project ' + projectid + ' manually!')
                     print('\n')
                     project_cris_id = 0
-                    # Print output to logfile and continue with next
+                    # Print output to logfile, send mail and continue with next
                     current_date = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")
+                    # Create and send email if all is fine (and we have selected to do do)
+                    if args.sendEmails.lower().strip() == "y":
+                        try:
+                            utils.send_html_email(email, dname, 'Gratulerar till beviljat forskningsbidrag! / Congratulations on your grant approval!', email_template, projectid, project_title, dmp_url, cris_project_url)
+                        except Exception as e:
+                            print(f"\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m ERROR: Failed to send email to {email}: {e}")
+                            errcount += 1
+                            with open(logfile, 'a') as lf:
+                                lf.write(f"ERROR: Failed to send email to {email}: {e}\n")
                     with open(logfile, 'a') as lf:
                         lf.write(
                             current_date + '\t' + projectid + '\t' + project_title + '\t' + fname + ' ' + lname + '\t' + email + '\t' + os.getenv(
@@ -580,6 +598,12 @@ with open(infile) as infile_txt:
                     project_cris_id = 0
                     # Print output to logfile and continue with next
                     current_date = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")
+                    # Create and send email if all is fine (and we have selected to do do)
+                    if args.sendEmails.lower().strip() == "y":
+                        try:
+                            utils.send_html_email(email, dname, 'Gratulerar till beviljat forskningsbidrag! / Congratulations on your grant approval!', email_template, projectid, project_title, dmp_url, cris_project_url)
+                        except Exception as e:
+                            print(f"\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m ERROR: Failed to send email to {email}: {e}")
                     with open(logfile, 'a') as lf:
                         lf.write(
                             current_date + '\t' + projectid + '\t' + project_title + '\t' + fname + ' ' + lname + '\t' + email + '\t' + os.getenv(
@@ -619,6 +643,12 @@ with open(infile) as infile_txt:
                     print('\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m Could NOT create Project with name: ' + project_title + ' in CRIS. Add ' + projectid + ' manually!')
                     errcount += 1
                     # Print output to logfile and continue with next
+                    # Create and send email if all is fine (and we have selected to do do)
+                    if args.sendEmails.lower().strip() == "y":
+                        try:
+                            utils.send_html_email(email, dname, 'Gratulerar till beviljat forskningsbidrag! / Congratulations on your grant approval!', email_template, projectid, project_title, dmp_url, cris_project_url)
+                        except Exception as e:
+                            print(f"\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m ERROR: Failed to send email to {email}: {e}")
                     current_date = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")
                     with open(logfile, 'a') as lf:
                         lf.write(
@@ -633,8 +663,9 @@ with open(infile) as infile_txt:
             try:
                 utils.send_html_email(email, dname, 'Gratulerar till beviljat forskningsbidrag! / Congratulations on your grant approval!', email_template, projectid, project_title, dmp_url, cris_project_url)
             except Exception as e:
-                print(f"ERROR: Failed to send email to {email}: {e}")
-                with open(os.getenv("LOGFILE"), 'a') as lf:
+                print(f"\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m ERROR: Failed to send email to {email}: {e}")
+                errcount += 1
+                with open(logfile, 'a') as lf:
                     lf.write(f"ERROR: Failed to send email to {email}: {e}\n")
 
         # Ready
