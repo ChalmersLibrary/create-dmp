@@ -551,7 +551,7 @@ with open(infile) as infile_txt:
                 person_crisdata = json.loads(person_crisdata)
                 # If person is not found in CRIS, skip and add project manually
                 if person_crisdata['TotalCount'] == 0:
-                    print('\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m No Person with e-mail ' + primary_email + ' found in CRIS. Skip and add project ' + projectid + ' manually!')
+                    print('\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m No Person with e-mail ' + primary_email + ' found in CRIS. Add project ' + projectid + ' manually!')
                     print('\n')
                     project_cris_id = 0
                     # Print output to logfile, send mail and continue with next
@@ -592,7 +592,7 @@ with open(infile) as infile_txt:
                     # person_orghome_name = person_org_crisdata['OrganizationData']['OrganizationParents'][0]['ParentOrganizationData']['DisplayNameSwe']
                     person_org = dict(OrganizationID=person_org_cris_id)
                 except requests.exceptions.HTTPError as e:
-                    print('\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m Person org lookup failed. Skip and add project ' + projectid + ' manually!')
+                    print('\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m Person org lookup failed. Add project ' + projectid + ' manually!')
                     errcount += 1
                     print('\n')
                     project_cris_id = 0
