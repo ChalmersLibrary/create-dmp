@@ -3,11 +3,11 @@ App for creating new DMP:s (projects) in DS Wizard from a tab separated file wit
 Assumes an input file in the following format (tab separated, utf-8/unix lf), especially note name orientation and e-mail address used (should ideally correspond with the e-mail returned by the Idp, but the script will try and look this up from Chalmers PDB):        
 2021-12345\tEinstein Albert\teinstein@chalmers.se\n           
       
-If you copy or export the input data from MS Excel, you might have to use a text editor like Notepad++ to make sure the input file uses ITF-8 and Unix type line feeds.     
+If you copy or export the input data from MS Excel, you might have to use a text editor like Notepad++ to make sure the input file uses UTF-8 and Unix type line feeds.     
 
 The script will try and create the user (and set permissions) if not already found in DSW. It will also (if selected) send e-mails to the researchers after DMP and CRIS project have been created, using a set of pre-defined, funder specific templates.    
 
-Copy env_example to .env and add current values to get started. Settings (paths) in create-new-dmp.conf need to be adjusted to the selected DSW KM.    
+Settings (paths) in create-new-dmp.conf need to be adjusted to the selected DSW KM.    
 
 Please use the staging environment (dsw-staging.xxx) and (at least initially) set send_emails to "false" when testing!  
 
@@ -19,10 +19,10 @@ Please use the staging environment (dsw-staging.xxx) and (at least initially) se
 * Access to SweCRIS and/or GDP API:s   
 
 *Install and run the app*   
-* Use **git clone https://github.com/ChalmersLibrary/create-dmp.git** to download the code into a local directory.    
-* Create an **.env** settings file in create_dmp/. Use env_examples as a template.   
-* Install the app by running **pip install .** in the root directory.   
-* Execute directly from command line, i.e. **create-dmp-i formas_251030.txt -f formas**   
+* Use `git clone https://github.com/ChalmersLibrary/create-dmp.git´ to download the code into a local directory.    
+* Create an **.env** settings file in `´create_dmp/. Use env_examples as a template.   
+* Install the app by running `pip install .´ in the root directory.   
+* Execute directly from command line, i.e. `create-dmp-i formas_251030.txt -f formas´   
 * Input files should ideally be put in the root directory (and log files are created there too).  
 
 *Options*    
@@ -34,7 +34,7 @@ Please use the staging environment (dsw-staging.xxx) and (at least initially) se
 * -h, --help    
     
 *Uninstall*    
-You can uninstall the app by running **pip uninstall create-dmp** from the root directory. Please note that you will need to re-install the app when something has been updated.       
+You can uninstall the app by running `pip uninstall create-dmp´ from the root directory. Please note that you will need to re-install the app when something has been updated.       
 
 This app can be used in conjunction with other Chalmers DS Wizard services, such as:   
 https://github.com/ChalmersLibrary/dsw2es        
