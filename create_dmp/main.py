@@ -20,7 +20,6 @@ from . import utils
 
 ## Script for creating new DMPs in Chalmers DSW from a tab-delimited input file
 ## See README.md for details
-## Require DSW >=4.22.0 and PDB/SMTP access. Change IntegrationLegacyType to IntegrationType if DSW version is < 4.22.0.
 
 # Settings
 base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -71,7 +70,7 @@ funder_name = args.funder.lower().strip()
 # Create logfile, example: formas_20231001_121212.log
 logfile = funder_name + '_' + datetime.now().strftime("%Y%m%d_%H%M%S") + '.log'
 
-print("\nChecking that all looks good before continuing")
+print("\nVerifying that all looks good before continuing")
 #print("\n", end="")
 for _ in range(4):  # Adjust the number of asterisks here
     print(".", end="", flush=True)
@@ -93,6 +92,16 @@ if os.path.exists(infile) is False or utils.validate_input_file(infile) is False
     exit()
 else:
     print("\u2713 Input file " + infile + " exists, is readable and looks fine.")
+if utils.validate_chalmers_emails(infile):
+    print("\u2713 All emails in infile are valid Chalmers addresses.")
+else:
+    print("❌ Infile contains non-Chalmers email addresses. You need to fix this before continuing, exiting now!")
+    exit()
+if os.path.exists('create_dmp/.env') is False:
+    print("\033[91m❌\033[0m ERROR: .env settings file does not exist in create_dmp/ directory, exiting!")
+    exit()
+else:
+    print("\u2713 Settings file exists in current directory.")
 if os.access('.', os.W_OK):
     print("\u2713 Script has write access to the current directory.")
 if args.sendEmails.lower().strip() == 'y' and utils.test_smtp_connection() is False:
@@ -266,10 +275,14 @@ with open(infile) as infile_txt:
                 project_end = swecrisdata['projectEndDate']
                 # Note: Project start/end date needs to be 'yyyy-mm-dd' in DSW, comes as 'yyyy-mm-dd hh:ss:sss' from Swecris
             except requests.exceptions.HTTPError as e:
-                print('ERROR: No data for id: ' + projectid + '_' + funder_suffix + ' was found in SweCRIS! Skipping to next.')
+                print('\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m ERROR: No data for project id: ' + projectid + '_' + funder_suffix + ' was found in SweCRIS! Skipping to next.')
+                with open(logfile, 'a') as lf:
+                        lf.write('No data for id: ' + projectid + ' was found in Swecris!\n')
                 print('\n')
                 with open(logfile, 'a') as lf:
-                    lf.write('ERROR: No data for id: ' + projectid + '_' + funder_suffix + ' was found in SweCRIS! Skipping to next.')
+                    lf.write('\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m ERROR: No data for project id: ' + projectid + '_' + funder_suffix + ' was found in SweCRIS! Skipping to next.')
+                    with open(logfile, 'a') as lf:
+                        lf.write('No data for id: ' + projectid + ' was found in Swecris!\n')
                 errcount += 1
                 continue
         elif source.lower() == 'gdp':
@@ -278,12 +291,21 @@ with open(infile) as infile_txt:
             gdp_headers = {'Accept': 'application/json',
                             'Authorization': gdp_api_key}
             try:
-                gdpdata = requests.get(url=gdp_url, headers=gdp_headers).text
-                if 'Internal server error' in gdpdata:
-                    print('ERROR: No data for id: ' + projectid + ' was found in GDP! Skipping to next.')
+                gdpresponse = requests.get(url=gdp_url, headers=gdp_headers)
+                total_records = gdpresponse.headers.get("x-totalrecords")
+                if total_records == '0':
+                    print('\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m ERROR: No data for project id: ' + projectid + ' was found in GDP! Skipping to next project. This project will need to be handled manually!')
+                    with open(logfile, 'a') as lf:
+                        lf.write('No data for id: ' + projectid + ' was found in GDP!\n')
                     errcount += 1
                     continue
-                gdpdata = json.loads(gdpdata)
+                if 'Internal server error' in gdpdata:
+                    print('\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m ERROR: No data for project id: ' + projectid + ' was found in GDP! Skipping to next project. This project will need to be handled manually!')
+                    with open(logfile, 'a') as lf:
+                        lf.write('No data for id: ' + projectid + ' was found in GDP!\n')
+                    errcount += 1
+                    continue
+                gdpdata = json.loads(gdpresponse.text)
                 print('Got data from GDP!')
                 project_title = gdpdata[0]['titelEng']
                 project_title_swe = gdpdata[0]['titel']
@@ -292,10 +314,14 @@ with open(infile) as infile_txt:
                 project_start = gdpdata[0]['startdatum']
                 project_end = gdpdata[0]['slutdatum']
             except requests.exceptions.HTTPError as e:
-                print('ERROR: No data for id: ' + projectid + ' was found in GDP! Skipping to next.')
+                print('\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m ERROR: No data for project id: ' + projectid + ' was found in GDP! Skipping to next project. This project will need to be handled manually!')
+                with open(logfile, 'a') as lf:
+                        lf.write('No data for id: ' + projectid + ' was found in GDP!\n')
                 print('\n')
                 with open(logfile, 'a') as lf:
-                    lf.write('ERROR: No data for id: ' + projectid + ' was found in GDP! Skipping to next.')
+                    lf.write('\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m ERROR: No data for project id: ' + projectid + ' was found in GDP! Skipping to next project. This project will need to be handled manually!')
+                    with open(logfile, 'a') as lf:
+                        lf.write('No data for id: ' + projectid + ' was found in GDP!\n')
                 errcount += 1
                 continue
         else:
@@ -680,6 +706,6 @@ with open(infile) as infile_txt:
         #lcounter += 1
 
 print('\n******************************\n')
-print('All done! Processed ' + str(lcounter) + ' projects, with ' + str(errcount) + ' issue(s). Output has been logged to ' + str(logfile) + '. If there were issues (see above), these have to be fixed manually. Exiting now...\n')
+print('All done! Processed ' + str(lcounter) + ' projects, with ' + str(errcount) + ' issue(s). Output has been logged to ' + str(logfile) + '. If there were issues (see above), these will have to be fixed manually. Exiting now...\n')
 utils.pdb_stop_session(pdb_session_token)
 exit()

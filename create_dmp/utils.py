@@ -154,3 +154,16 @@ def validate_input_file(filepath):
 
     #print("File passed all checks.")
     return True
+
+def validate_chalmers_emails(file_path):
+    with open(file_path, 'r', encoding='utf-8') as f:
+        for line_number, line in enumerate(f, start=1):
+            parts = line.strip().split('\t')
+            if len(parts) < 3:
+                print(f"Line {line_number} is malformed: {line.strip()}")
+                continue
+            email = parts[2]
+            if not email.endswith('@chalmers.se'):
+                #print(f"Invalid email on line {line_number}: {email}")
+                return False
+    return True
