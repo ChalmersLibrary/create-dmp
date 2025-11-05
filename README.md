@@ -23,13 +23,13 @@ Please use the staging environment (dsw-staging.xxx) and (at least initially) se
 
 *Install and run the app*   
 * Use `git clone https://github.com/ChalmersLibrary/create-dmp.git´ to download the code into a local directory.    
-* Create an **.env** settings file in the create_dmp/ directory. Use env_example as a template.   
+* Create an **.env** settings file in the /create_dmp sub-directory. Use env_example as a template.   
 * Install the app by running `pip install .´ in the app root directory.   
-* Execute directly from command line, i.e. `create-dmp-i formas_251030.txt -f formas´   
+* Execute directly from command line, i.e. `create-dmp -i formas_251030.txt -f formas´   
 * Input files should ideally be put in the app root directory, otherwise the path has to be specified on the command line (log files are created there too).  
 
 *Options*    
-* -i, --infile - Input file, tab-delimited, with columns (no headers): ProjectID, Name (inverted), Email. default=infile (param)    
+* -i, --infile - Input file, tab-delimited, with columns (no headers): ProjectID, Name (inverted), Email. (required)    
 * -f, --funder - Funder name, e.g. formas or vr, (required)    
 * -u, --updateCRIS - Create CRIS project records (y/n), default=y
 * -e, --sendEmails - Send e-mail alerts to researchers automatically (y/n) default=n

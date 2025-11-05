@@ -231,8 +231,8 @@ with open(infile) as infile_txt:
         # Assumes inverted names, change below otherwise
         projectid = row[0].strip()
         print('Processing project ' + projectid)
-        name = row[1]
-        email = row[2]
+        name = row[1].strip()
+        email = row[2].strip()
         #orcid = row[3]
         orcid = ''
         lname = name.split()[0].strip()
@@ -262,7 +262,7 @@ with open(infile) as infile_txt:
             try:
                 swecrisdata = requests.get(url=swecris_url, headers=swecris_headers).text
                 if 'Internal server error' in swecrisdata:
-                    print('ERROR: No data for id: ' + projectid + '_' + funder_suffix + ' was found in SweCRIS! Skipping to next.')
+                    print('ERROR: No data for ' + funder_name + ' id: ' + projectid + '_' + funder_suffix + ' was found in SweCRIS! Skipping to next.')
                     errcount += 1
                     continue
                 swecrisdata = json.loads(swecrisdata)
@@ -277,12 +277,12 @@ with open(infile) as infile_txt:
             except requests.exceptions.HTTPError as e:
                 print('\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m ERROR: No data for project id: ' + projectid + '_' + funder_suffix + ' was found in SweCRIS! Skipping to next.')
                 with open(logfile, 'a') as lf:
-                        lf.write('No data for id: ' + projectid + ' was found in Swecris!\n')
+                        lf.write('No data for ' + funder_name + ' project id: ' + projectid + ' was found in Swecris!\n')
                 print('\n')
                 with open(logfile, 'a') as lf:
                     lf.write('\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m ERROR: No data for project id: ' + projectid + '_' + funder_suffix + ' was found in SweCRIS! Skipping to next.')
                     with open(logfile, 'a') as lf:
-                        lf.write('No data for id: ' + projectid + ' was found in Swecris!\n')
+                        lf.write('No data for ' + funder_name + ' project id: ' + projectid + ' was found in Swecris!\n')
                 errcount += 1
                 continue
         elif source.lower() == 'gdp':
@@ -294,15 +294,15 @@ with open(infile) as infile_txt:
                 gdpresponse = requests.get(url=gdp_url, headers=gdp_headers)
                 total_records = gdpresponse.headers.get("x-totalrecords")
                 if total_records == '0':
-                    print('\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m ERROR: No data for project id: ' + projectid + ' was found in GDP! Skipping to next project. This project will need to be handled manually!')
+                    print('\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m ERROR: No data for ' + funder_name + ' project id: ' + projectid + ' was found in GDP! Skipping to next project. This project will need to be handled manually!')
                     with open(logfile, 'a') as lf:
-                        lf.write('No data for id: ' + projectid + ' was found in GDP!\n')
+                        lf.write('No data for ' + funder_name + ' project id: ' + projectid + ' was found in GDP!\n')
                     errcount += 1
                     continue
                 if 'Internal server error' in gdpdata:
-                    print('\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m ERROR: No data for project id: ' + projectid + ' was found in GDP! Skipping to next project. This project will need to be handled manually!')
+                    print('\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m ERROR: No data for ' + funder_name + ' project id: ' + projectid + ' was found in GDP! Skipping to next project. This project will need to be handled manually!')
                     with open(logfile, 'a') as lf:
-                        lf.write('No data for id: ' + projectid + ' was found in GDP!\n')
+                        lf.write('No data for ' + funder_name + ' project id: ' + projectid + ' was found in GDP!\n')
                     errcount += 1
                     continue
                 gdpdata = json.loads(gdpresponse.text)
@@ -314,14 +314,14 @@ with open(infile) as infile_txt:
                 project_start = gdpdata[0]['startdatum']
                 project_end = gdpdata[0]['slutdatum']
             except requests.exceptions.HTTPError as e:
-                print('\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m ERROR: No data for project id: ' + projectid + ' was found in GDP! Skipping to next project. This project will need to be handled manually!')
+                print('\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m ERROR: No data for ' + funder_name + ' project id: ' + projectid + ' was found in GDP! Skipping to next project. This project will need to be handled manually!')
                 with open(logfile, 'a') as lf:
-                        lf.write('No data for id: ' + projectid + ' was found in GDP!\n')
+                        lf.write('No data for project id: ' + projectid + ' was found in GDP!\n')
                 print('\n')
                 with open(logfile, 'a') as lf:
-                    lf.write('\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m ERROR: No data for project id: ' + projectid + ' was found in GDP! Skipping to next project. This project will need to be handled manually!')
+                    lf.write('\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m ERROR: No data for ' + funder_name + ' project id: ' + projectid + ' was found in GDP! Skipping to next project. This project will need to be handled manually!')
                     with open(logfile, 'a') as lf:
-                        lf.write('No data for id: ' + projectid + ' was found in GDP!\n')
+                        lf.write('No data for ' + funder_name + ' project id: ' + projectid + ' was found in GDP!\n')
                 errcount += 1
                 continue
         else:
