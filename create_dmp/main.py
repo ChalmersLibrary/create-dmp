@@ -25,6 +25,10 @@ from . import utils
 base_dir = os.path.dirname(os.path.abspath(__file__))
 env_path = os.path.join(base_dir, '.env')
 
+# DSW < 4.22 compatibility fix
+# Set to 'IntegrationType' for DSW version < 4.22, IntegrationLegacyType otherwise (if the old type is still used in KM)
+dsw_integration_type = 'IntegrationType'
+
 # Load environment variables
 load_dotenv(dotenv_path=env_path)
 dswurl = os.getenv("DSW_URL")
@@ -95,7 +99,7 @@ else:
 if utils.validate_chalmers_emails(infile):
     print("\u2713 All emails in infile are valid Chalmers addresses.")
 else:
-    print("❌ Infile contains non-Chalmers email addresses. You need to fix this before continuing, exiting now!")
+    print("\033[91m❌\033[0m ERROR: Infile contains non-Chalmers email addresses. You need to fix this before continuing, exiting now!")
     exit()
 if os.path.exists('create_dmp/.env') is False:
     print("\033[91m❌\033[0m ERROR: .env settings file does not exist in create_dmp/ directory, exiting!")
@@ -205,7 +209,10 @@ with open(infile) as infile_txt:
     print("CRIS URL: " + os.getenv("CRIS_URL"))
     print("Logfile: " + logfile)
     print("\n")
-    print("Is all the above correct? PLEASE CHECK THIS CAREFULLY!\n")
+    print("Is all the above correct? PLEASE CHECK THIS CAREFULLY!")
+    if dswurl.startswith('https://dsw.chalmers.se'):
+        print("\033[91mNOTE: You are about to create new records in the PRODUCTION DSW and CRIS instances!\033[0m")
+    print("\n")
     print("Choose Y/n and press ENTER to continue...")
     
     yes = {'Y'}
@@ -299,7 +306,7 @@ with open(infile) as infile_txt:
                         lf.write('No data for ' + funder_name + ' project id: ' + projectid + ' was found in GDP!\n')
                     errcount += 1
                     continue
-                if 'Internal server error' in gdpdata:
+                if 'Internal server error' in gdpresponse.text:
                     print('\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m ERROR: No data for ' + funder_name + ' project id: ' + projectid + ' was found in GDP! Skipping to next project. This project will need to be handled manually!')
                     with open(logfile, 'a') as lf:
                         lf.write('No data for ' + funder_name + ' project id: ' + projectid + ' was found in GDP!\n')
@@ -370,7 +377,7 @@ with open(infile) as infile_txt:
             primary_email = email
    
         # Lookup user in DSW and get Uuid, or create new if user don't exist
-        dsw_getuser = dswurl + '/users?q=' + str(email)
+        dsw_getuser = dswurl + '/users?q=' + str(primary_email)
         userdata = requests.get(url=dsw_getuser, headers=headers).text
         userdata = json.loads(userdata)
         if userdata['_embedded']['users']:
@@ -382,7 +389,7 @@ with open(infile) as infile_txt:
             try:
                 newuser_url = dswurl + '/users'
                 pw = ''.join(random.choice(string.ascii_letters) for i in range(44))
-                newuser_data = dict(email=email, lastName=lname, firstName=fname, role='researcher', password=pw,
+                newuser_data = dict(email=primary_email, lastName=lname, firstName=fname, role='researcher', password=pw,
                                     affiliation='Chalmers')
                 data_newuser = requests.post(url=newuser_url, json=newuser_data, headers=headers).text
                 data_newuser = json.loads(data_newuser)
@@ -391,17 +398,17 @@ with open(infile) as infile_txt:
                 # Activate new user
                 user_activate_url = dswurl + '/users/' + useruuid
                 try:
-                    activate_data = dict(email=email, active=True, lastName=lname, firstName=fname, role='researcher',
+                    activate_data = dict(email=primary_email, active=True, lastName=lname, firstName=fname, role='researcher',
                                          affiliation='Chalmers')
                     data_activate = requests.put(url=user_activate_url, headers=headers).text
                     print('User: ' + useruuid + ' has been activated.')
                 except requests.exceptions.HTTPError as e:
-                    print('ERROR: Could not activate user with e-mail: ' + email + '.')
+                    print('ERROR: Could not activate user with e-mail: ' + primary_email + '.')
                     with open(logfile, 'a') as lf:
-                        lf.write('ERROR: Could not activate user: ' + email + '.' + e.response.text)
+                        lf.write('ERROR: Could not activate user: ' + primary_email + '.' + e.response.text)
                     sys.exit(1)
             except requests.exceptions.HTTPError as e:
-                print('ERROR: Could not create user with e-mail: ' + email + '.')
+                print('ERROR: Could not create user with e-mail: ' + primary_email + '.')
                 utils.pdb_stop_session(pdb_session_token)
                 sys.exit(1)
 
@@ -444,7 +451,7 @@ with open(infile) as infile_txt:
         email_dict = dict(
             path=config.get('Paths', 'email.path'),
             phasesAnsweredIndication=phases_answered_dict,
-            value=dict(value=email, type='StringReply'), type='SetReplyEvent',
+            value=dict(value=primary_email, type='StringReply'), type='SetReplyEvent',
             uuid=str(uuid.uuid4()))
         orcid_dict = dict(
             path=config.get('Paths', 'orcid.path'),
@@ -495,7 +502,7 @@ with open(infile) as infile_txt:
         funder_dict = dict(
             path=config.get('Paths', 'funder.path'),
             phasesAnsweredIndication=phases_answered_dict,
-            value=dict(value=dict(value=funder_display_name, id=funderid, type='IntegrationLegacyType'), type='IntegrationReply'),
+            value=dict(value=dict(value=funder_display_name, id=funderid, type=dsw_integration_type), type='IntegrationReply'),
             type='SetReplyEvent',
             uuid=str(uuid.uuid4()))
         project_status_dict = dict(
@@ -585,15 +592,15 @@ with open(infile) as infile_txt:
                     # Create and send email if all is fine (and we have selected to do do)
                     if args.sendEmails.lower().strip() == "y":
                         try:
-                            utils.send_html_email(email, dname, 'Gratulerar till beviljat forskningsbidrag! / Congratulations on your grant approval!', email_template, projectid, project_title, dmp_url, cris_project_url)
+                            utils.send_html_email(primary_email, dname, 'Gratulerar till beviljat forskningsbidrag! / Congratulations on your grant approval!', email_template, projectid, project_title, dmp_url, cris_project_url)
                         except Exception as e:
-                            print(f"\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m ERROR: Failed to send email to {email}: {e}")
+                            print(f"\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m ERROR: Failed to send email to {primary_email}: {e}")
                             errcount += 1
                             with open(logfile, 'a') as lf:
-                                lf.write(f"ERROR: Failed to send email to {email}: {e}\n")
+                                lf.write(f"ERROR: Failed to send email to {primary_email}: {e}\n")
                     with open(logfile, 'a') as lf:
                         lf.write(
-                            current_date + '\t' + projectid + '\t' + project_title + '\t' + fname + ' ' + lname + '\t' + email + '\t' + os.getenv(
+                            current_date + '\t' + projectid + '\t' + project_title + '\t' + fname + ' ' + lname + '\t' + primary_email + '\t' + os.getenv(
                                 "DSW_UI_URL") + '/projects/' + dmpuuid + '\t' + str(
                                 project_cris_id) + '\t' + cris_project_url + '\n')
                     print('\n')
@@ -627,12 +634,12 @@ with open(infile) as infile_txt:
                     # Create and send email if all is fine (and we have selected to do do)
                     if args.sendEmails.lower().strip() == "y":
                         try:
-                            utils.send_html_email(email, dname, 'Gratulerar till beviljat forskningsbidrag! / Congratulations on your grant approval!', email_template, projectid, project_title, dmp_url, cris_project_url)
+                            utils.send_html_email(primary_email, dname, 'Gratulerar till beviljat forskningsbidrag! / Congratulations on your grant approval!', email_template, projectid, project_title, dmp_url, cris_project_url)
                         except Exception as e:
-                            print(f"\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m ERROR: Failed to send email to {email}: {e}")
+                            print(f"\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m ERROR: Failed to send email to {primary_email}: {e}")
                     with open(logfile, 'a') as lf:
                         lf.write(
-                            current_date + '\t' + projectid + '\t' + project_title + '\t' + fname + ' ' + lname + '\t' + email + '\t' + os.getenv(
+                            current_date + '\t' + projectid + '\t' + project_title + '\t' + fname + ' ' + lname + '\t' + primary_email + '\t' + os.getenv(
                                 "DSW_UI_URL") + '/projects/' + dmpuuid + '\t' + str(
                                 project_cris_id) + '\t' + cris_project_url + '\n')
                     print('\n')
@@ -672,13 +679,13 @@ with open(infile) as infile_txt:
                     # Create and send email if all is fine (and we have selected to do do)
                     if args.sendEmails.lower().strip() == "y":
                         try:
-                            utils.send_html_email(email, dname, 'Gratulerar till beviljat forskningsbidrag! / Congratulations on your grant approval!', email_template, projectid, project_title, dmp_url, cris_project_url)
+                            utils.send_html_email(primary_email, dname, 'Gratulerar till beviljat forskningsbidrag! / Congratulations on your grant approval!', email_template, projectid, project_title, dmp_url, cris_project_url)
                         except Exception as e:
-                            print(f"\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m ERROR: Failed to send email to {email}: {e}")
+                            print(f"\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m ERROR: Failed to send email to {primary_email}: {e}")
                     current_date = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")
                     with open(logfile, 'a') as lf:
                         lf.write(
-                            current_date + '\t' + projectid + '\t' + project_title + '\t' + fname + ' ' + lname + '\t' + email + '\t' + os.getenv(
+                            current_date + '\t' + projectid + '\t' + project_title + '\t' + fname + ' ' + lname + '\t' + primary_email + '\t' + os.getenv(
                                 "DSW_UI_URL") + '/projects/' + dmpuuid + '\t' + str(
                                 project_cris_id) + '\t' + cris_project_url + '\n')
                     print('\n')
@@ -687,19 +694,19 @@ with open(infile) as infile_txt:
         # Create and send email if all is fine (and we have selected to do do)
         if args.sendEmails.lower().strip() == "y":
             try:
-                utils.send_html_email(email, dname, 'Gratulerar till beviljat forskningsbidrag! / Congratulations on your grant approval!', email_template, projectid, project_title, dmp_url, cris_project_url)
+                utils.send_html_email(primary_email, dname, 'Gratulerar till beviljat forskningsbidrag! / Congratulations on your grant approval!', email_template, projectid, project_title, dmp_url, cris_project_url)
             except Exception as e:
-                print(f"\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m ERROR: Failed to send email to {email}: {e}")
+                print(f"\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m ERROR: Failed to send email to {primary_email}: {e}")
                 errcount += 1
                 with open(logfile, 'a') as lf:
-                    lf.write(f"ERROR: Failed to send email to {email}: {e}\n")
+                    lf.write(f"ERROR: Failed to send email to {primary_email}: {e}\n")
 
         # Ready
         # Print output to logfile and continue with next
         current_date = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")
         with open(logfile, 'a') as lf:
             lf.write(
-                current_date + '\t' + projectid + '\t' + project_title + '\t' + fname + ' ' + lname + '\t' + email + '\t' + os.getenv(
+                current_date + '\t' + projectid + '\t' + project_title + '\t' + fname + ' ' + lname + '\t' + primary_email + '\t' + os.getenv(
                     "DSW_UI_URL") + '/projects/' + dmpuuid + '\t' + str(
                     project_cris_id) + '\t' + cris_project_url + '\n')
         print('\n')

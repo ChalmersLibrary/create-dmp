@@ -1,3 +1,4 @@
+# Environment variables for create_dmp
 PACKAGE_ID=chalmers:root:2.0.12
 TEMPLATE_ID=chalmers:vr-eng:0.5.1
 SWECRIS_URL=https://swecris-api.vr.se/v1/projects/
