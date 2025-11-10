@@ -41,7 +41,7 @@ smtp_port = os.getenv("SMTP_PORT")
 smtp_user = os.getenv("SMTP_USER")
 smtp_password = os.getenv("SMPT_PASSWORD")
 email_sender = os.getenv("EMAIL_SENDER")
-create_cris_projects = 'true'
+create_cris_projects = ''
 cris_funder_id = ''
 send_emails = ''
 email_template = ''
@@ -75,16 +75,15 @@ funder_name = args.funder.lower().strip()
 logfile = funder_name + '_' + datetime.now().strftime("%Y%m%d_%H%M%S") + '.log'
 
 print("\nVerifying that all looks good before continuing")
-#print("\n", end="")
-for _ in range(4):  # Adjust the number of asterisks here
+for _ in range(4):
     print(".", end="", flush=True)
-    time.sleep(0.1)  # Delay in seconds
+    time.sleep(0.1)
     time.sleep(1)
 print("\n")
 
 print("\u2713 Python version: " + str(sys.version_info.major) + "." + str(sys.version_info.minor) + "." + str(sys.version_info.micro))
 
-# Validate input etc.
+# Validate env variables, input etc.
 if funder_name not in ['formas', 'vr']:
     print('\033[91m❌\033[0m ERROR: Funder has to be one of "formas", "vr". Please correct this and try again!')
     exit()
@@ -143,7 +142,7 @@ else:
     email_template = 'mail_template_generic.html'
     create_cris_projects = 'false'
 
-    # debug
+    # debug CC e-mail address
     cc = ''
 
 # Start a PDB session and login for use later
@@ -188,10 +187,11 @@ with open(infile) as infile_txt:
     print('\nEverything looks good!\n')
     time.sleep(2)
     print("\n", end="")
-    for _ in range(40):  # Adjust the number of asterisks here
+    for _ in range(40):  
         print("*", end="", flush=True)
-        time.sleep(0.05)  # Delay in seconds
+        time.sleep(0.05)  
     time.sleep(1)
+
     print("\n")
     print("We are about to process " + str(line_count) + " projects, using the following settings:\n")
     print("Input file: " + infile)
@@ -253,13 +253,13 @@ with open(infile) as infile_txt:
         project_cris_id = 0
         cris_project_url = ''
 
-        # Initialize other parameters with test data
-        project_title = 'Default test project'
+        # Initialize other parameters 
+        project_title = ''
         project_title_swe = ''
-        project_desc = 'This is the description. More to follow...'
+        project_desc = ''
         project_desc_swe = ''
-        project_start = '2022-01-01'
-        project_end = '2025-12-31'
+        project_start = ''
+        project_end = ''
         
         if source.lower() == 'swecris' or source == '':
             # Fetch data from SweCRIS, if not available in the Prisma spreadsheet
@@ -293,7 +293,7 @@ with open(infile) as infile_txt:
                 errcount += 1
                 continue
         elif source.lower() == 'gdp':
-            # Fetch data from GDP, if not available in the Prisma spreadsheet
+            # Fetch project data from GDP, if not available in the Prisma spreadsheet
             gdp_url = gdp_base_url + '?diarienummer=' + projectid
             gdp_headers = {'Accept': 'application/json',
                             'Authorization': gdp_api_key}
@@ -582,31 +582,69 @@ with open(infile) as infile_txt:
                 person_get_url = os.getenv("CRIS_PERSON_URL") + '/Persons?idValue=' + primary_email + '&idTypeValue=EMAIL'
                 person_crisdata = requests.get(url=person_get_url, headers={'Accept': 'application/json'}).text
                 person_crisdata = json.loads(person_crisdata)
-                # If person is not found in CRIS, skip and add project manually
+                # If person is not found in CRIS
                 if person_crisdata['TotalCount'] == 0:
-                    print('\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m No Person with e-mail ' + primary_email + ' found in CRIS. Add project ' + projectid + ' manually!')
-                    print('\n')
-                    project_cris_id = 0
-                    # Print output to logfile, send mail and continue with next
-                    current_date = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")
-                    # Create and send email if all is fine (and we have selected to do do)
-                    if args.sendEmails.lower().strip() == "y":
-                        try:
-                            utils.send_html_email(primary_email, dname, 'Gratulerar till beviljat forskningsbidrag! / Congratulations on your grant approval!', email_template, projectid, project_title, dmp_url, cris_project_url)
-                        except Exception as e:
-                            print(f"\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m ERROR: Failed to send email to {primary_email}: {e}")
-                            errcount += 1
+                    print("Person with e-mail " + primary_email + " not found in CRIS, trying input email...")
+                    # Try using email from input instead
+                    person_get_url = os.getenv("CRIS_PERSON_URL") + '/Persons?idValue=' + email + '&idTypeValue=EMAIL'
+                    person_crisdata = requests.get(url=person_get_url, headers={'Accept': 'application/json'}).text
+                    person_crisdata = json.loads(person_crisdata)
+                    if person_crisdata['TotalCount'] == 0:
+                        print("Person with e-mail " + email + " not found in CRIS, trying ORCID...")
+                        # Try using orcid instead if we have it
+                        if orcid != '':
+                            person_get_url = os.getenv("CRIS_PERSON_URL") + '/Persons?idValue=' + orcid + '&idTypeValue=ORCID'
+                            person_crisdata = requests.get(url=person_get_url, headers={'Accept': 'application/json'}).text
+                            person_crisdata = json.loads(person_crisdata)
+                            # If still not found, skip and add project manually
+                            if person_crisdata['TotalCount'] == 0:
+                                print('\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m No Person with e-mail ' + primary_email + ' or ORCID ' + orcid + ' found in CRIS. Add project ' + projectid + ' manually!')
+                                print('\n')
+                                project_cris_id = 0
+                                # Print output to logfile, send mail and continue with next
+                                current_date = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")
+                                # Create and send email if all is fine (and we have selected to do do)
+                                if args.sendEmails.lower().strip() == "y":
+                                    try:
+                                        utils.send_html_email(primary_email, dname, 'Gratulerar till beviljat forskningsbidrag! / Congratulations on your grant approval!', email_template, projectid, project_title, dmp_url, cris_project_url)
+                                    except Exception as e:
+                                        print(f"\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m ERROR: Failed to send email to {primary_email}: {e}")
+                                        errcount += 1
+                                        with open(logfile, 'a') as lf:
+                                            lf.write(f"ERROR: Failed to send email to {primary_email}: {e}\n")
+                                with open(logfile, 'a') as lf:
+                                    lf.write(
+                                        current_date + '\t' + projectid + '\t' + project_title + '\t' + fname + ' ' + lname + '\t' + primary_email + '\t' + os.getenv(
+                                            "DSW_UI_URL") + '/projects/' + dmpuuid + '\t' + str(
+                                            project_cris_id) + '\t' + cris_project_url + '\n')
+                                print('\n')
+                                errcount += 1
+                                continue
+                        else:
+                            print('\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m No Person with e-mail ' + primary_email + ' or ORCID ' + orcid + ' found in CRIS. Add project ' + projectid + ' manually!')
+                            print('\n')
+                            project_cris_id = 0
+                            # Print output to logfile, send mail and continue with next
+                            current_date = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")
+                            # Create and send email if all is fine (and we have selected to do do)
+                            if args.sendEmails.lower().strip() == "y":
+                                try:
+                                    utils.send_html_email(primary_email, dname, 'Gratulerar till beviljat forskningsbidrag! / Congratulations on your grant approval!', email_template, projectid, project_title, dmp_url, cris_project_url)
+                                except Exception as e:
+                                    print(f"\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m ERROR: Failed to send email to {primary_email}: {e}")
+                                    errcount += 1
+                                    with open(logfile, 'a') as lf:
+                                        lf.write(f"ERROR: Failed to send email to {primary_email}: {e}\n")
                             with open(logfile, 'a') as lf:
-                                lf.write(f"ERROR: Failed to send email to {primary_email}: {e}\n")
-                    with open(logfile, 'a') as lf:
-                        lf.write(
-                            current_date + '\t' + projectid + '\t' + project_title + '\t' + fname + ' ' + lname + '\t' + primary_email + '\t' + os.getenv(
-                                "DSW_UI_URL") + '/projects/' + dmpuuid + '\t' + str(
-                                project_cris_id) + '\t' + cris_project_url + '\n')
-                    print('\n')
-                    errcount += 1
-                    continue
+                                lf.write(
+                                    current_date + '\t' + projectid + '\t' + project_title + '\t' + fname + ' ' + lname + '\t' + primary_email + '\t' + os.getenv(
+                                        "DSW_UI_URL") + '/projects/' + dmpuuid + '\t' + str(
+                                        project_cris_id) + '\t' + cris_project_url + '\n')
+                            print('\n')
+                            errcount += 1
+                            continue
                 
+                # If found, cet Person CRIS ID and create Person object for CRIS Project
                 person_cris_id = str(person_crisdata['Persons'][0]['Id'])
 
                 persons = []
