@@ -239,7 +239,7 @@ with open(infile) as infile_txt:
         projectid = row[0].strip()
         print('Processing project ' + projectid)
         name = row[1].strip()
-        email = row[2].strip()
+        email = row[2].strip().lower()
         #orcid = row[3]
         orcid = ''
         lname = name.split()[0].strip()
@@ -562,7 +562,7 @@ with open(infile) as infile_txt:
             checkdata = requests.get(url=cris_check_url, headers={'Accept': 'application/json'}).text
             checkdata = json.loads(checkdata)
             if checkdata['TotalCount'] == 1:
-                print("\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m Project " + projectid + " already exists in CRIS. Add DMP to project " + projectid + "manually!")
+                print("\033[91m!\033[0m\033[91m!\033[0m\033[91m!\033[0m Project " + projectid + " already exists in CRIS. Add DMP to project " + projectid + " manually!")
                 errcount += 1
                 project_cris_id = 0
             else:
