@@ -18,7 +18,8 @@ Please use the staging environment (dsw-staging.xxx) and (at least initially) se
 * Python >= 3.8  
 * DS Wizard v. 4.22 or later (replace IntegrationLegacyType with IntegrationType if DSW version is < 4.22.0) and a user ID with admin API access       
 * Access to Chalmers PDB API    
-* Mail server for outgoing mail (SMTP)   
+* Mail server for outgoing mail (SMTP)
+* Admin access to Chalmers CRIS API:s      
 * Access to SweCRIS and/or GDP API:s   
 
 *Install and run the app*   
@@ -31,9 +32,9 @@ Please use the staging environment (dsw-staging.xxx) and (at least initially) se
 *Options*    
 * -i, --infile - Input file, tab-delimited, with columns (no headers): ProjectID, Name (inverted), Email. (required)    
 * -f, --funder - Funder name, e.g. formas or vr, (required)    
-* -u, --updateCRIS - Create CRIS project records (y/n), default=y
-* -e, --sendEmails - Send e-mail alerts to researchers automatically (y/n) default=n
-* -v, --verbose - Enable verbose output (y/n), default=n  
+* -u, --updateCRIS - Create CRIS project records (y/n), default=y(es)
+* -e, --sendEmails - Send e-mail alerts to researchers automatically (y/n) default=y(es)
+* -v, --verbose - Enable verbose output (y/n), default=n(o)  
 * -h, --help    
     
 *Uninstall*    
@@ -42,4 +43,3 @@ You can uninstall the app by running `pip uninstall create-dmp´ from the root d
 This app can be used in conjunction with other Chalmers DS Wizard services, such as:   
 https://github.com/ChalmersLibrary/dsw2es        
 https://github.com/ChalmersLibrary/cth-dmps-api   
-

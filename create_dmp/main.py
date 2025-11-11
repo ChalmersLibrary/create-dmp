@@ -64,7 +64,7 @@ parser = ArgumentParser(description='App for creating new DMP(s) and Chalmers CR
 parser.add_argument('-i', '--infile', help='Input file, tab-delimited, with columns: ProjectID, Name (inverted), Email', required=True)
 parser.add_argument('-f', '--funder', help='Funder name, e.g. formas or vr', required=True)
 parser.add_argument('-u', '--updateCRIS', help='Create CRIS project record', choices=['y', 'n'], default='y')
-parser.add_argument('-e', '--sendEmails', help='Send e-mail to new user', choices=['y', 'n'], default='n')
+parser.add_argument('-e', '--sendEmails', help='Send e-mail to new user', choices=['y', 'n'], default='y')
 parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output')
 args = parser.parse_args()
 
@@ -433,6 +433,7 @@ with open(infile) as infile_txt:
             sys.exit(1)
 
         # Add content to dmp
+        # TODO: Add multiple (Chalmers) contributors and external collaborators (when available from GDP)
 
         # Mandatory field in API, set to default values for all (it will be fine)
         phases_answered_dict = dict(answeredQuestions=7, indicationType='PhasesAnsweredIndication',
