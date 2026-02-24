@@ -42,17 +42,18 @@ def send_html_email(recipient, recipent_name, subject, template_filename, projec
     html_template = load_template(template_filename)
     html_content = html_template.format(recipent_name=recipent_name, projectid=projectid, dmptitle=dmptitle, dmpurl=dmpurl, crisurl=crisurl)
     msg = MIMEMultipart('alternative')
+    cc = email_sender  # CC to dataoffice email for record-keeping
     msg['From'] = email_sender
     msg['To'] = recipient
     # Add CC to dataoffice email for record-keeping
-    msg['Cc'] = email_sender
+    msg['Cc'] = cc
     msg['Subject'] = subject
     msg.attach(MIMEText(html_content, 'html'))
     try:
         with smtplib.SMTP(smtp_server, smtp_port) as server:
             server.starttls()
             server.login(smtp_user, smtp_password)
-            server.sendmail(email_sender, recipient, msg.as_string())
+            server.sendmail(email_sender, [recipient, cc], msg.as_string())
             print("Email to " + recipient + " sent successfully.")
     except Exception as e:
         print(f"Failed to send email: {e}")
