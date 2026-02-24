@@ -44,6 +44,8 @@ def send_html_email(recipient, recipent_name, subject, template_filename, projec
     msg = MIMEMultipart('alternative')
     msg['From'] = email_sender
     msg['To'] = recipient
+    # Add CC to dataoffice email for record-keeping
+    msg['Cc'] = email_sender
     msg['Subject'] = subject
     msg.attach(MIMEText(html_content, 'html'))
     try:
