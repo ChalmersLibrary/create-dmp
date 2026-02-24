@@ -27,7 +27,7 @@ env_path = os.path.join(base_dir, '.env')
 
 # DSW < 4.22 compatibility fix
 # Set to 'IntegrationType' for DSW version < 4.22, IntegrationLegacyType otherwise (if the old type is still used in KM)
-dsw_integration_type = 'IntegrationType'
+dsw_integration_type = 'IntegrationLegacyType'
 
 # Load environment variables
 load_dotenv(dotenv_path=env_path)
