@@ -415,7 +415,7 @@ with open(infile) as infile_txt:
         # Create new dmp
         print('Trying to create new DMP with title: ' + project_title)
         try:
-            create_dmp_url = dswurl + '/questionnaires'
+            create_dmp_url = dswurl + '/projects'
             create_data = dict(questionTagUuids=[config.get('Paths', 'question.tag.uuids')], packageId=packageid,
                                templateId=templateid, visibility='PrivateQuestionnaire',
                                sharing='RestrictedQuestionnaire', name=project_title,
@@ -528,7 +528,7 @@ with open(infile) as infile_txt:
                                 project_name_dict, project_desc_dict, project_start_dict, project_end_dict,
                                 funding_dict, funder_dict, project_status_dict, grantid_dict, phase_dict])
         try:
-            newdmp_url = dswurl + '/questionnaires/' + dmpuuid + '/content'
+            newdmp_url = dswurl + '/projects/' + dmpuuid + '/content'
             data_newdmp = requests.put(url=newdmp_url, json=dmp_data, headers=headers).text
             print('DMP updated with content.')
         except requests.exceptions.HTTPError as e:
@@ -544,7 +544,7 @@ with open(infile) as infile_txt:
         )
         
         try:
-            dmpowner_url = dswurl + '/questionnaires/' + dmpuuid + '/share'
+            dmpowner_url = dswurl + '/projects/' + dmpuuid + '/share'
             data_dmpowner = requests.put(url=dmpowner_url, json=dmp_owner_data, headers=headers).text
             print('DMP changed owner to ' + useruuid)
         except requests.exceptions.HTTPError as e:
